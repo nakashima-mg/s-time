@@ -79,7 +79,7 @@
                 text-align: right !important;
             }
             /* ボタン類、特に追加されたモーダル関連を非表示 */
-            #export-report-btn, #add-action-btn, #export-button-container, .remove-action-btn, .modal, #gemini-suggest-action-btn, #gemini-loading-status {
+            #export-report-btn, #add-action-btn, #export-button-container, .remove-action-btn, .modal {
                 display: none !important;
             }
             /* セクションの枠線と背景色を薄くする */
@@ -424,22 +424,9 @@
                     </tbody>
                 </table>
             </div>
-            <div class="flex flex-wrap gap-3 mt-4">
-                <button id="add-action-btn" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
-                    + アクション項目を追加
-                </button>
-                <!-- Gemini LLM 機能ボタン -->
-                <button id="gemini-suggest-action-btn" class="px-4 py-2 bg-pink-600 text-white text-sm font-medium rounded-lg shadow-md hover:bg-pink-700 transition disabled:bg-pink-400">
-                    ✨ 課題からアクションを提案
-                </button>
-                <span id="gemini-loading-status" class="text-sm text-pink-700 flex items-center hidden">
-                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    提案を生成中...
-                </span>
-            </div>
+            <button id="add-action-btn" class="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+                + アクション項目を追加
+            </button>
         </section>
 
         <!-- データ抽出ボタン (PDF/印刷形式を想定) -->
@@ -452,19 +439,24 @@
     </div>
 
     <script>
-        // LLM API設定
-        const apiKey = ""; 
-        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
-        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-
         // ローカル環境での安定動作のため、v8のSDKに合わせる
         
         // Firestoreセットアップのためのグローバル変数
         // v8 SDKでは、firebase.auth() や firebase.firestore() を使用してサービスにアクセスします。
         
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+       // GitHub PagesなどのWebサーバーで実行するための固定設定
+        const firebaseConfig = {
+            apiKey:"AIzaSyBJK7rew7oXl7BR3NuHj7eAuBxH0-57K5k",
+            authDomain: "monthly-report-tool.firebaseapp.com",
+            projectId: "monthly-report-tool",
+            storageBucket:"monthly-report-tool.firebasestorage.app",
+            messagingSenderId: "716526992795",
+            appId: "1:716526992795:web:86aadeb264d5d75c9ff53e"
+        };
+        // Firebase Consoleで取得したprojectIdの値を直接使用
+        const appId = firebaseConfig.projectId; 
+        // 外部サーバーではカスタム認証トークンは使用しないため、nullまたは不要な行として扱う
+        const initialAuthToken = null;
 
         let db, auth, userId;
         let currentReportRef = null; // 現在リスニング中のドキュメント参照
@@ -507,31 +499,8 @@
         let salesData = JSON.parse(JSON.stringify(initialSalesData));
         let overallMidTermData = JSON.parse(JSON.stringify(initialOverallMidTermData));
         let actionPlan = JSON.parse(JSON.stringify(initialActionPlan));
-        let actionIdCounter = initialActionPlan.length > 0 ? Math.max(...initialActionPlan.map(a => a.id)) : 0; // 既存のアクションIDの最大値からスタート
+        let actionIdCounter = initialActionPlan.length;
 
-        /**
-         * Exponential backoffを使用したフェッチ関数
-         * @param {string} url - API URL
-         * @param {object} options - fetchオプション
-         * @param {number} maxRetries - 最大リトライ回数
-         * @returns {Promise<Response>}
-         */
-        async function exponentialBackoffFetch(url, options, maxRetries = 5) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (response.status !== 429) { // 429 (Too Many Requests) 以外はリトライせずに処理
-                        return response;
-                    }
-                    console.warn(`Rate limit hit (429). Retrying in ${Math.pow(2, i)} seconds...`);
-                } catch (error) {
-                    console.error("Fetch error, retrying...", error);
-                }
-                await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
-            }
-            throw new Error('Max retries exceeded.');
-        }
-        
         // Debounce utility to prevent excessive writes
         let saveTimeout;
         const debounceSave = () => {
@@ -778,130 +747,6 @@
             });
         };
         
-        /**
-         * Gemini APIを使用してアクションプランを提案
-         */
-        const handleGenerateActionPlan = async () => {
-            const generateBtn = document.getElementById('gemini-suggest-action-btn');
-            const loadingStatus = document.getElementById('gemini-loading-status');
-            
-            // 既存の課題要因を取得
-            const issueData = {
-                // Section 2
-                利益変動の主な要因_不調: document.getElementById('sales-factor-bad').value || '特になし',
-                // Section 5
-                在庫分析の主な課題と要因: document.getElementById('inventory-factor').value || '特になし',
-                // Section 6
-                店舗の課題要因_次月アクション: document.getElementById('bad-store-factor').value || '特になし'
-            };
-            
-            // 課題が入力されていない場合は警告
-            if (Object.values(issueData).every(v => v === '特になし')) {
-                alert('アクションプランを提案するため、まず Section 2, 5, 6 の「不調」または「課題」の欄に具体的な要因を入力してください。');
-                return;
-            }
-
-            generateBtn.disabled = true;
-            loadingStatus.classList.remove('hidden');
-
-            const systemPrompt = `あなたは経験豊富な経営コンサルタントです。提供された報告データから抽出した「不調要因」や「課題」に基づき、次月実行すべき具体的な「アクションプラン」を最大3つ提案してください。
-
-提案は必ず日本語のJSON配列形式で返してください。アクションは具体的で、KPIと担当者、期限が現実的に設定できるものである必要があります。
-
-JSONスキーマは以下の通りです:
-{
-  "type": "ARRAY",
-  "items": {
-    "type": "OBJECT",
-    "properties": {
-      "content": { "type": "STRING", "description": "施策内容" },
-      "kpi": { "type": "STRING", "description": "目的（KPI）" },
-      "person": { "type": "STRING", "description": "担当者（例: 氏名A、営業部長）" },
-      "deadline": { "type": "STRING", "description": "期限（例: X+1月15日、随時）" }
-    },
-    "propertyOrdering": ["content", "kpi", "person", "deadline"]
-  }
-}
-`;
-
-            const userQuery = `以下の課題に基づき、具体的なアクションプランを提案してください。
-1. 利益変動の主な要因（不調）: ${issueData.利益変動の主な要因_不調}
-2. 在庫分析の主な課題と要因: ${issueData.在庫分析の主な課題と要因}
-3. 店舗の課題要因・次月アクション: ${issueData.店舗の課題要因_次月アクション}`;
-
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                systemInstruction: {
-                    parts: [{ text: systemPrompt }]
-                },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "content": { "type": "STRING" },
-                                "kpi": { "type": "STRING" },
-                                "person": { "type": "STRING" },
-                                "deadline": { "type": "STRING" }
-                            },
-                            propertyOrdering: ["content", "kpi", "person", "deadline"]
-                        }
-                    }
-                }
-            };
-
-            try {
-                const response = await exponentialBackoffFetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                if (!response.ok) {
-                    throw new Error(`API request failed with status: ${response.status}`);
-                }
-
-                const result = await response.json();
-                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (!jsonText) {
-                    throw new Error("Invalid response structure from Gemini API.");
-                }
-
-                const newActions = JSON.parse(jsonText);
-                
-                if (Array.isArray(newActions) && newActions.length > 0) {
-                    newActions.forEach(action => {
-                        actionIdCounter++;
-                        // 提案されたアクションを既存のactionPlanに追加
-                        actionPlan.push({ 
-                            id: actionIdCounter,
-                            content: action.content || '[内容不明]', 
-                            kpi: action.kpi || '[KPI不明]', 
-                            person: action.person || '未定', 
-                            deadline: action.deadline || '未定'
-                        });
-                    });
-
-                    renderActionPlan(); // UIを更新
-                    debounceSave();     // DBに保存
-                    
-                    console.log("Gemini: 新しいアクションプランが正常に追加されました。");
-                } else {
-                    console.warn("Gemini: 有効なアクションプランが生成されませんでした。");
-                }
-
-            } catch (error) {
-                console.error("Gemini API Error:", error);
-                alert('アクションプランの生成中にエラーが発生しました。コンソールを確認してください。');
-            } finally {
-                generateBtn.disabled = false;
-                loadingStatus.classList.add('hidden');
-            }
-        };
-
         // データの収集 (UIとローカル変数の統合)
         const collectCurrentData = () => {
             // 現在選択されている店舗・年月をUIから取得
@@ -1231,10 +1076,6 @@ JSONスキーマは以下の通りです:
                 debounceSave(); // アクションプランの変更を保存
             });
             
-            // --- 新しい Gemini LLM 機能のリスナー設定 ---
-            document.getElementById('gemini-suggest-action-btn').addEventListener('click', handleGenerateActionPlan);
-
-
             // アクション項目の削除リスナー (renderActionPlan内で設定)
             document.getElementById('action-plan-body').addEventListener('click', (e) => {
                 if (e.target.classList.contains('remove-action-btn')) {

@@ -50,6 +50,20 @@
             align-items: center;
             justify-content: flex-start; /* 左寄せに変更 */
         }
+        /* パスワード入力モーダルのスタイル */
+        #password-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+            backdrop-filter: blur(5px);
+        }
 
         /* ************************************** */
         /* PDF/印刷用スタイル調整 */
@@ -79,7 +93,7 @@
                 text-align: right !important;
             }
             /* ボタン類、特に追加されたモーダル関連を非表示 */
-            #export-report-btn, #add-action-btn, #export-button-container, .remove-action-btn, .modal {
+            #export-report-btn, #add-action-btn, #export-button-container, .remove-action-btn, .modal, #password-overlay {
                 display: none !important;
             }
             /* セクションの枠線と背景色を薄くする */
@@ -102,6 +116,26 @@
 
 </head>
 <body class="p-4 md:p-8">
+
+    <!-- パスワード入力オーバーレイ -->
+    <div id="password-overlay">
+        <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">アクセス認証</h2>
+            <p class="text-sm text-gray-600 mb-6">このレポートにアクセスするにはパスワードを入力してください。（初期パスワード: `report2025`）</p>
+            
+            <input type="password" id="password-input" class="data-input text-center mb-4" placeholder="パスワード">
+            
+            <p id="password-error" class="text-red-500 text-sm mb-4 hidden">パスワードが間違っています。</p>
+
+            <button id="access-button" class="w-full py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition">
+                レポートを開く
+            </button>
+
+            <p class="text-xs text-red-400 mt-4 text-center">注意：この認証はソースコードに依存しており、高度なセキュリティ機能ではありません。</p>
+        </div>
+    </div>
+
+
     <div id="app" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
         <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">
             月次 利益・店舗報告ツール
@@ -638,6 +672,10 @@
         }
         
         // *******************************************************************
+        
+        // アクセス制御用のパスワード (NOTE: これはクライアントサイドの簡素なセキュリティであり、ソースコードを見れば簡単に回避できます。)
+        const ACCESS_PASSWORD = 'report2025';
+        const AUTH_KEY = 'report_tool_authenticated';
 
         let db, auth, userId;
         let currentReportRef = null; // 現在リスニング中のドキュメント参照
@@ -1482,17 +1520,60 @@
                 window.print();
             });
         }
-
-
-        // 初期ロード
-        window.onload = function() {
-            // UIイベントを設定
+        
+        // アプリケーション起動関数
+        const startApplication = () => {
+             // UIイベントを設定
             setupUIEvents();
             
             // Firebaseの初期化（有効な場合のみ実行）
             initializeFirebase(); 
-
             // Firebaseが有効でない場合、初期値での描画を行う (initializeFirebase内のelseブロックに処理を委譲)
+        };
+
+        // パスワードチェックと認証ロジック
+        const checkPassword = () => {
+            const passwordOverlay = document.getElementById('password-overlay');
+            const passwordInput = document.getElementById('password-input');
+            const accessButton = document.getElementById('access-button');
+            const errorElement = document.getElementById('password-error');
+            
+            // 1. セッションストレージで認証済みかチェック
+            if (sessionStorage.getItem(AUTH_KEY) === 'true') {
+                passwordOverlay.style.display = 'none';
+                startApplication();
+                return;
+            }
+
+            // 2. 認証モーダルを表示し、イベントリスナーを設定
+            passwordOverlay.style.display = 'flex';
+            
+            const handleAccess = () => {
+                if (passwordInput.value === ACCESS_PASSWORD) {
+                    sessionStorage.setItem(AUTH_KEY, 'true');
+                    errorElement.classList.add('hidden');
+                    passwordOverlay.style.display = 'none';
+                    startApplication();
+                } else {
+                    errorElement.classList.remove('hidden');
+                    passwordInput.value = ''; // パスワードをクリア
+                    passwordInput.focus();
+                }
+            };
+
+            accessButton.addEventListener('click', handleAccess);
+            passwordInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleAccess();
+                }
+            });
+        };
+
+
+        // 初期ロード
+        window.onload = function() {
+            // アプリケーション全体を実行する前にパスワードをチェック
+            checkPassword();
         }
 
     </script>

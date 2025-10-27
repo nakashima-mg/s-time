@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>月次 営業報告データ入力・計算ツール</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* フォントの指定 */
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f8f9fa;
+        }
+        /* 入力欄の共通スタイル */
+        .data-input {
+            appearance: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #d1d5db;
+            width: 100%;
+            transition: all 0.2s;
+            text-align: right;
+        }
+        .data-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        /* 計算結果の表示スタイル */
+        .calculated-value {
+            padding: 8px 12px;
+            background-color: #e5e7eb;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #1f2937;
+            text-align: right;
+            min-height: 40px; /* 入力欄と高さを合わせる */
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+        .text-center-v {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end; /* 右寄せに変更 */
+        }
+        .text-center-v-left {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start; /* 左寄せに変更 */
+        }
+
+        /* ************************************** */
+        /* PDF/印刷用スタイル調整 */
+        /* ************************************** */
+        @media print {
+            body {
+                background-color: white !important; /* 背景色を白に強制 */
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            #app {
+                box-shadow: none !important; /* シャドウを非表示 */
+                padding: 0 !important;
+            }
+            /* 入力フィールドをテキスト表示に変換 */
+            .data-input {
+                border: none !important;
+                background-color: transparent !important;
+                text-align: left !important;
+                padding: 0 !important;
+                height: auto !important;
+            }
+            /* 計算値の背景色を削除 */
+            .calculated-value {
+                background-color: transparent !important;
+                padding: 8px 0 !important;
+                text-align: right !important;
+            }
+            /* ボタン類、特に追加されたモーダル関連を非表示 */
+            #export-report-btn, #add-action-btn, #export-button-container, .remove-action-btn, .modal, #gemini-suggest-action-btn, #gemini-loading-status {
+                display: none !important;
+            }
+            /* セクションの枠線と背景色を薄くする */
+            section {
+                border: 1px solid #ccc !important;
+                background-color: #f0f0f0 !important;
+                page-break-inside: avoid; /* セクションが途中で切れないようにする */
+            }
+            /* テキストエリアの値を印刷時に表示 */
+            textarea::after {
+                content: attr(value); /* value属性ではなく、現在の内容を表示 */
+            }
+        }
+    </style>
+
+    <!-- Firebase SDKのインポートをv8.10.1に統一し、ローカル実行時の安定性を向上 -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+</head>
+<body class="p-4 md:p-8">
+    <div id="app" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">
+            月次 利益報告データ入力・計算ツール
+        </h1>
+        <p class="text-gray-500 mb-8">
+            利益項目に基づき、実績と目標対比の計算を行います。
+            <span id="loading-status" class="text-sm text-red-500 font-semibold ml-4"></span>
+        </p>
+
+        <!-- 1. エグゼクティブ・サマリー -->
+        <section class="mb-8 p-4 bg-blue-50 rounded-lg">
+            <h2 class="text-xl font-semibold text-blue-800 mb-4">1. エグゼクティブ・サマリー</h2>
+            <div class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <!-- 年選択 (selectに変更) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">年</label>
+                        <select id="year-input" class="data-input text-left mt-1 report-date-input" data-field-name="selectedYear">
+                            <!-- JSでオプションを生成 -->
+                        </select>
+                    </div>
+                    <!-- 月度選択 (selectに変更) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">月度</label>
+                        <select id="month-input" class="data-input text-left mt-1 report-date-input" data-field-name="selectedMonth">
+                            <!-- JSでオプションを生成 -->
+                        </select>
+                    </div>
+                    <!-- 店舗選択 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">店舗</label>
+                        <select id="store-select" class="data-input text-left mt-1 report-date-input" data-field-name="selectedStore">
+                            <!-- オプションはJSで挿入 -->
+                        </select>
+                    </div>
+                    <!-- レポート切替ボタン -->
+                    <div class="md:col-span-1">
+                        <button id="load-report-btn" class="w-full px-3 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition">
+                            レポート読込/切替
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">特筆すべき店舗状況</label>
+                    <textarea id="highlight-store" class="data-input text-left mt-1 h-16 data-field" data-field-name="highlightStore" placeholder="例: [特筆すべき成功または課題のある店舗名]が[成功/課題の内容]で注目されます。"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">次月施策の重点</label>
+                    <input type="text" id="next-action" class="data-input text-left mt-1 data-field" data-field-name="nextAction" placeholder="例: [施策の具体的な名称やテーマ]を最重点とする">
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 利益実績と目標対比 (月次のみ) -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">2. 利益実績と目標対比 (月次)</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">目標額(A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実績額(B)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月実績(C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前年実績(D)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">達成率(B/A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月比(B/C)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sales-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- データはJavaScriptで挿入される -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 space-y-3">
+                <label class="block text-sm font-medium text-gray-700">利益変動の主な要因（好調）</label>
+                <textarea id="sales-factor-good" class="data-input text-left h-16 data-field" data-field-name="salesFactorGood" placeholder="例：車両粗利の増加要因、販促費用対効果の改善など"></textarea>
+                <label class="block text-sm font-medium text-gray-700">利益変動の主な要因（不調）</label>
+                <textarea id="sales-factor-bad" class="data-input text-left h-16 data-field" data-field-name="salesFactorBad" placeholder="例：業販価格の低下、在庫評価損の発生など"></textarea>
+            </div>
+        </section>
+
+        <!-- 3. 中長期実績対比 (四半期・通年) (修正: 全体利益のみ) -->
+        <section class="mb-8 p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">3. 中長期実績対比 (全体利益のみ)</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-purple-100">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">四半期目標</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">四半期実績</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">通年目標</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">通年実績</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mid-term-table-body" class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 bg-indigo-50 font-bold">全体利益</td>
+                            <td><input type="text" id="qtrGoal-input" data-field="qtrGoal" value="30000000" class="data-input mid-term-input" placeholder="目標"></td>
+                            <td><input type="text" id="qtrActual-input" data-field="qtrActual" value="28800000" class="data-input mid-term-input" placeholder="実績"></td>
+                            <td><input type="text" id="annualGoal-input" data-field="annualGoal" value="120000000" class="data-input mid-term-input" placeholder="目標"></td>
+                            <td><input type="text" id="annualActual-input" data-field="annualActual" value="115600000" class="data-input mid-term-input" placeholder="実績"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 4. 利益率分析 (Old 3) -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">4. 利益率分析</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実績額</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月実績</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実績利益率</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月差(pt)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">全体利益</td>
+                            <td>
+                                <!-- 全体利益実績額はSection 2から自動計算 -->
+                                <div id="overall-profit-actual-display" class="calculated-value bg-yellow-50 text-sm">9,500,000</div>
+                            </td>
+                            <td>
+                                <!-- 全体利益前月実績はSection 2から自動計算 -->
+                                <div id="overall-profit-prev-display" class="calculated-value text-sm">9,000,000</div>
+                            </td>
+                            <td>
+                                <div id="gross-profit-rate" class="calculated-value text-sm">31.58%</div>
+                            </td>
+                            <td>
+                                <div id="gross-profit-diff" class="calculated-value text-sm">--%</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <!-- 利益率計算に必要な全体売上実績を手動で入力 -->
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700">全体売上実績（利益率計算用）</label>
+                <!-- type="text" に変更 -->
+                <input type="text" id="total-sales-for-rate" value="30000000" class="data-input text-left mt-1 data-field" data-field-name="totalSalesForRate" placeholder="全体売上実績を入力">
+            </div>
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700">利益率の変動要因</label>
+                <textarea id="gross-profit-factor" class="data-input text-left h-16 mt-1 data-field" data-field-name="grossProfitFactor" placeholder="例：仕入れ価格の上昇、セールによる販売価格の低下、高粗利商品の販売増など"></textarea>
+            </div>
+        </section>
+        
+        <!-- 5. 在庫回転率分析 (Old 4) -->
+        <section class="mb-8 p-4 bg-gray-50 rounded-lg">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">5. 在庫回転率分析</h2>
+            
+            <!-- 在庫回転率 計算テーブル -->
+            <h3 class="text-lg font-medium text-gray-700 mb-2">① 在庫回転率</h3>
+            <div class="overflow-x-auto mb-4">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">項目</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">総掲載枠 (A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実掲載台数 (B)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">販売台数 (C)</th>
+                            <!-- ヘッダーを修正 -->
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(総)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(実)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+                        <tr>
+                            <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center-v-left">実績</td>
+                            <td><input type="text" id="inv-slot-total" value="100" class="data-input inv-input data-field" data-field-name="invSlotTotal" placeholder="台数"></td>
+                            <td><input type="text" id="inv-actual" value="80" class="data-input inv-input data-field" data-field-name="invActual" placeholder="台数"></td>
+                            <td><div id="inv-sales-total" class="calculated-value bg-yellow-50 text-sm">--</div></td>
+                            <!-- 計算結果の表示単位を修正 -->
+                            <td><div id="inv-rate-slot" class="calculated-value text-sm">--</div></td>
+                            <td><div id="inv-rate-actual" class="calculated-value text-sm">--</div></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 販売台数の内訳入力欄 -->
+            <div class="mt-2 ml-10 text-sm text-gray-600">
+                <h4 class="font-medium mb-1">C. 販売台数の内訳:</h4>
+                <div class="flex space-x-4 mb-2">
+                    <div class="w-1/2 flex items-center space-x-2">
+                        <label class="w-20 text-right">小売:</label>
+                        <input type="text" id="inv-sales-retail" value="20" class="data-input inv-input text-right data-field" data-field-name="invSalesRetail" placeholder="台数">
+                    </div>
+                    <div class="w-1/2 flex items-center space-x-2">
+                        <label class="w-20 text-right">業販:</label>
+                        <input type="text" id="inv-sales-wholesale" value="5" class="data-input inv-input text-right data-field" data-field-name="invSalesWholesale" placeholder="台数">
+                    </div>
+                </div>
+            </div>
+
+            
+            <div class="mt-6">
+                <!-- 不良在庫率 計算テーブル (金額ベース + 前月比を追加) -->
+                <h3 class="text-lg font-medium text-gray-700 mb-2">② 不良在庫率（金額ベース）</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">項目</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">棚卸資産総額</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">不良在庫評価額(当月)</th>
+                                <!-- 追加: 前月不良在庫評価額 -->
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">不良在庫評価額(前月)</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">不良在庫率</th>
+                                <!-- 追加: 不良在庫評価額前月比 -->
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月比 (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center-v-left">実績（金額）</td>
+                                <td><input type="text" id="inv-total-value" value="100000000" class="data-input inv-input data-field" data-field-name="invTotalValue" placeholder="金額"></td>
+                                <td><input type="text" id="inv-bad-value" value="5000000" class="data-input inv-input data-field" data-field-name="invBadValue" placeholder="金額"></td>
+                                <!-- 追加: 前月不良在庫評価額入力 -->
+                                <td><input type="text" id="inv-bad-value-prev" value="6000000" class="data-input inv-input data-field" data-field-name="invBadValuePrev" placeholder="金額"></td>
+                                <td><div id="inv-bad-rate" class="calculated-value text-sm">--</div></td>
+                                <!-- 追加: 不良在庫評価額前月比表示 -->
+                                <td><div id="inv-bad-value-diff" class="calculated-value text-sm">--</div></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 不良在庫台数テーブル (名称を修正) -->
+                <h3 class="text-lg font-medium text-gray-700 my-2">不良在庫台数分析（台数ベース）</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">項目</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">当月実績 (台数)</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月実績 (台数)</th>
+                                <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月比 (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center-v-left">不良在庫台数</td>
+                                <td><input type="text" id="inv-bad-count-actual" value="10" class="data-input inv-input data-field" data-field-name="invBadCountActual" placeholder="当月台数"></td>
+                                <td><input type="text" id="inv-bad-count-prev" value="12" class="data-input inv-input data-field" data-field-name="invBadCountPrev" placeholder="前月台数"></td>
+                                <td><div id="inv-bad-count-diff" class="calculated-value text-sm">--</div></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700">在庫分析の主な課題と要因</label>
+                <textarea id="inventory-factor" class="data-input text-left h-16 mt-1 data-field" data-field-name="inventoryFactor" placeholder="例：長期在庫による回転率の低下、特定車種の在庫過多など"></textarea>
+            </div>
+        </section>
+
+        <!-- 6. 店舗の状況と特記事項 (Old 5) -->
+        <section class="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">6. 店舗の状況と特記事項</h2>
+            
+            <div class="space-y-4">
+                <h3 class="text-lg font-medium text-yellow-800 mb-2">報告対象店舗の状況</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">店舗名</label>
+                        <!-- ここは店舗選択と連携しているため、手動入力から選択値表示に変更するのもアリだが、今回は手動入力を維持し、選択された店舗名がエグゼクティブサマリーに表示されるようにする -->
+                        <input type="text" id="store-name" class="data-input text-left mt-1 data-field" data-field-name="storeName" placeholder="例：新宿店" value="新宿店">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">実績概要</label>
+                        <input type="text" id="store-achievement-summary" class="data-input text-left mt-1 data-field" data-field-name="storeAchievementSummary" placeholder="例：対目標115%達成 (前期比+5%)" value="対目標115%達成">
+                    </div>
+                </div>
+
+                <div class="p-4 bg-green-100 rounded-lg border border-green-300">
+                    <h4 class="text-md font-medium text-green-700 mb-2">A. 好調要因・共有事項（良かった点）</h4>
+                    <textarea id="good-store-factor" class="data-input text-left h-24 mt-1 data-field" data-field-name="goodStoreFactor" placeholder="成功要因と横展開可能な共有事項"></textarea>
+                </div>
+                
+                <div class="p-4 bg-red-100 rounded-lg border border-red-300">
+                    <h4 class="text-md font-medium text-red-700 mb-2">B. 課題要因・次月アクション（改善点）</h4>
+                    <textarea id="bad-store-factor" class="data-input text-left h-24 mt-1 data-field" data-field-name="badStoreFactor" placeholder="課題要因とそれに対する具体的な次月アクション"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">その他特記事項</label>
+                    <textarea id="other-notes" class="data-input text-left h-16 mt-1 data-field" data-field-name="otherNotes" placeholder="例：棚卸し差異の発生状況、大きな設備トラブルの有無など"></textarea>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7. 次月アクションプラン (Old 6) -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">7. 次月アクションプラン</h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">No.</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">施策内容</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">目的（KPI）</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">担当者</th>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">期限</th>
+                        </tr>
+                    </thead>
+                    <tbody id="action-plan-body" class="bg-white divide-y divide-gray-200">
+                        <!-- データはJavaScriptで挿入される -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex flex-wrap gap-3 mt-4">
+                <button id="add-action-btn" class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition">
+                    + アクション項目を追加
+                </button>
+                <!-- Gemini LLM 機能ボタン -->
+                <button id="gemini-suggest-action-btn" class="px-4 py-2 bg-pink-600 text-white text-sm font-medium rounded-lg shadow-md hover:bg-pink-700 transition disabled:bg-pink-400">
+                    ✨ 課題からアクションを提案
+                </button>
+                <span id="gemini-loading-status" class="text-sm text-pink-700 flex items-center hidden">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    提案を生成中...
+                </span>
+            </div>
+        </section>
+
+        <!-- データ抽出ボタン (PDF/印刷形式を想定) -->
+        <div id="export-button-container" class="pt-8 border-t border-gray-200 mt-4 flex justify-end">
+            <button id="export-report-btn" class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 transition">
+                報告書をPDF/印刷形式で出力
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // LLM API設定
+        const apiKey = ""; 
+        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+        // ローカル環境での安定動作のため、v8のSDKに合わせる
+        
+        // Firestoreセットアップのためのグローバル変数
+        // v8 SDKでは、firebase.auth() や firebase.firestore() を使用してサービスにアクセスします。
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId;
+        let currentReportRef = null; // 現在リスニング中のドキュメント参照
+
+        // === 店舗リストを定義 ===
+        const STORE_LIST = ["4号BP", "柏インター", "北春日部", "熊谷"];
+        // === 年/月度リストを定義 ===
+        const YEAR_START = 2025;
+        const YEAR_END = 2030;
+        const MONTH_LIST = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // "01" ~ "12"
+
+        // 初期データの定義 (DBが空の場合のフォールバック)
+        const initialSalesData = [
+            { name: '全体利益', goal: 0, actual: 0, prevMonth: 0, prevYear: 0 },
+            { name: '車両粗利', goal: 5000000, actual: 4800000, prevMonth: 4500000, prevYear: 4600000 },
+            { name: '営業粗利', goal: 3000000, actual: 2700000, prevMonth: 2500000, prevYear: 2800000 },
+            { name: '下取り粗利(小売・AA)', goal: 200000, actual: 50000, prevMonth: 100000, prevYear: 100000 }, 
+            { name: '業販粗利', goal: 1000000, actual: 1200000, prevMonth: 900000, prevYear: 800000 },
+            { name: 'SB粗利', goal: 800000, actual: 750000, prevMonth: 850000, prevYear: 700000 }
+        ];
+
+        const initialOverallMidTermData = {
+            qtrGoal: 30000000,
+            qtrActual: 28800000,
+            annualGoal: 120000000,
+            annualActual: 115600000
+        };
+
+        const initialActionPlan = [
+            { id: 1, content: '来店客数増加のためのSNSプロモーション強化', kpi: '来店客数Z人増加', person: '氏名A', deadline: 'X+1月15日' },
+            { id: 2, content: '店舗スタッフ教育の徹底（商品知識向上）', kpi: '顧客満足度YY%向上', person: '氏名C', deadline: '随時' }
+        ];
+        
+        // UIからもアクセスできるようにグローバル変数として定義
+        let selectedYear = String(new Date().getFullYear());
+        let selectedMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+        let selectedStore = STORE_LIST[0]; // 初期値はリストの最初の店舗
+
+        // ライブデータとして使う変数 (初期値はフォールバックデータ)
+        let salesData = JSON.parse(JSON.stringify(initialSalesData));
+        let overallMidTermData = JSON.parse(JSON.stringify(initialOverallMidTermData));
+        let actionPlan = JSON.parse(JSON.stringify(initialActionPlan));
+        let actionIdCounter = initialActionPlan.length > 0 ? Math.max(...initialActionPlan.map(a => a.id)) : 0; // 既存のアクションIDの最大値からスタート
+
+        /**
+         * Exponential backoffを使用したフェッチ関数
+         * @param {string} url - API URL
+         * @param {object} options - fetchオプション
+         * @param {number} maxRetries - 最大リトライ回数
+         * @returns {Promise<Response>}
+         */
+        async function exponentialBackoffFetch(url, options, maxRetries = 5) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status !== 429) { // 429 (Too Many Requests) 以外はリトライせずに処理
+                        return response;
+                    }
+                    console.warn(`Rate limit hit (429). Retrying in ${Math.pow(2, i)} seconds...`);
+                } catch (error) {
+                    console.error("Fetch error, retrying...", error);
+                }
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+            }
+            throw new Error('Max retries exceeded.');
+        }
+        
+        // Debounce utility to prevent excessive writes
+        let saveTimeout;
+        const debounceSave = () => {
+            if (saveTimeout) clearTimeout(saveTimeout);
+            // データの整合性を保つため、計算処理を先に実行
+            calculateProfitTotals(); 
+            // 1秒後に保存を実行
+            saveTimeout = setTimeout(saveDataToFirestore, 1000); 
+        };
+
+        // ヘルパー関数: 数値を3桁区切り（カンマ）にする
+        const formatNumber = (num) => {
+            if (num === null || num === undefined || isNaN(num)) return '0';
+            return Math.round(num).toLocaleString('ja-JP');
+        };
+
+        // 利益カテゴリの合計を計算し、全体利益 (salesData[0]) を更新する (月次のみ)
+        const calculateProfitTotals = () => {
+            const total = { goal: 0, actual: 0, prevMonth: 0, prevYear: 0 };
+            
+            // カテゴリ 1 から salesData.length-1 の合計を計算 (月次のみ)
+            for (let i = 1; i < salesData.length; i++) {
+                total.goal += parseFloat(salesData[i].goal) || 0;
+                total.actual += parseFloat(salesData[i].actual) || 0;
+                total.prevMonth += parseFloat(salesData[i].prevMonth) || 0;
+                total.prevYear += parseFloat(salesData[i].prevYear) || 0;
+            }
+
+            // '全体利益' (index 0) の月次実績を更新
+            salesData[0].goal = total.goal;
+            salesData[0].actual = total.actual;
+            salesData[0].prevMonth = total.prevMonth;
+            salesData[0].prevYear = total.prevYear;
+        };
+
+        // 新しいヘルパー関数: 特定の行の計算結果セルを部分的に更新する (月次テーブル用)
+        const updateCalculatedRowDisplay = (index) => {
+            const item = salesData[index];
+            const tr = document.getElementById(`row-${index}`); 
+
+            if (!tr) return;
+
+            const achievementRate = item.goal > 0 ? ((item.actual / item.goal) * 100).toFixed(1) : '-';
+            const prevMonthRatio = item.prevMonth > 0 ? ((item.actual / item.prevMonth) * 100).toFixed(1) : '-';
+
+            // 1. 全体利益の行（index 0）の計算値表示を更新
+            if (index === 0) {
+                tr.querySelector('[data-field="goal-display"]').textContent = formatNumber(item.goal);
+                tr.querySelector('[data-field="actual-display"]').textContent = formatNumber(item.actual);
+                tr.querySelector('[data-field="prevMonth-display"]').textContent = formatNumber(item.prevMonth);
+                tr.querySelector('[data-field="prevYear-display"]').textContent = formatNumber(item.prevYear);
+            }
+
+            // 2. 達成率セルを更新
+            const achievementCell = tr.querySelector('.achievement-rate-cell');
+            if (achievementCell) {
+                achievementCell.textContent = `${achievementRate}%`;
+                achievementCell.classList.remove('text-green-600', 'text-red-600');
+                if (parseFloat(achievementRate) >= 100) {
+                    achievementCell.classList.add('text-green-600');
+                } else if (achievementRate !== '-') {
+                    achievementCell.classList.add('text-red-600');
+                }
+            }
+
+            // 3. 前月比セルを更新
+            const prevMonthCell = tr.querySelector('.prev-month-ratio-cell');
+            if (prevMonthCell) {
+                prevMonthCell.textContent = `${prevMonthRatio}%`;
+            }
+        };
+
+        // 在庫回転率分析の計算ロジック
+        const calculateInventoryMetrics = () => {
+            // ① 在庫回転率の計算 (UIから直接値を取得)
+            const invSlotTotalInput = document.getElementById('inv-slot-total').value.replace(/,/g, '');
+            const invActualInput = document.getElementById('inv-actual').value.replace(/,/g, '');
+            const invSalesRetailInput = document.getElementById('inv-sales-retail').value.replace(/,/g, '');
+            const wholesaleSalesInput = document.getElementById('inv-sales-wholesale').value.replace(/,/g, '');
+
+            const invSlotTotal = parseFloat(invSlotTotalInput) || 0;
+            const invActual = parseFloat(invActualInput) || 0;
+            const invSalesRetail = parseFloat(invSalesRetailInput) || 0;
+            const invSalesWholesale = parseFloat(wholesaleSalesInput) || 0;
+            const invSales = invSalesRetail + invSalesWholesale; // 合計販売台数 (C)
+
+            document.getElementById('inv-sales-total').textContent = formatNumber(invSales);
+
+            const rateSlot = invSlotTotal > 0 ? ((invSales / invSlotTotal) * 100).toFixed(1) : '--';
+            const rateActual = invActual > 0 ? ((invSales / invActual) * 100).toFixed(1) : '--';
+
+            document.getElementById('inv-rate-slot').textContent = rateSlot === '--' ? '--' : `${rateSlot} %`;
+            document.getElementById('inv-rate-actual').textContent = rateActual === '--' ? '--' : `${rateActual} %`;
+            
+            // ② 不良在庫率の計算 (金額ベース)
+            const invTotalValueInput = document.getElementById('inv-total-value').value.replace(/,/g, '');
+            const invBadValueInput = document.getElementById('inv-bad-value').value.replace(/,/g, '');
+            const invBadValuePrevInput = document.getElementById('inv-bad-value-prev').value.replace(/,/g, '');
+            
+            const invTotalValue = parseFloat(invTotalValueInput) || 0;
+            const invBadValue = parseFloat(invBadValueInput) || 0;
+            const invBadValuePrev = parseFloat(invBadValuePrevInput) || 0;
+
+            const badRate = invTotalValue > 0 ? ((invBadValue / invTotalValue) * 100).toFixed(1) : '--';
+            document.getElementById('inv-bad-rate').textContent = badRate === '--' ? '--' : `${badRate}%`;
+            
+            const badValueDiff = invBadValuePrev > 0
+                ? ((invBadValue / invBadValuePrev) * 100).toFixed(1)
+                : '--';
+            document.getElementById('inv-bad-value-diff').textContent = badValueDiff === '--' ? '--' : `${badValueDiff}%`;
+
+            // 不良在庫台数分析 (台数ベース)
+            const badCountActualInput = document.getElementById('inv-bad-count-actual').value.replace(/,/g, '');
+            const badCountPrevInput = document.getElementById('inv-bad-count-prev').value.replace(/,/g, '');
+            const badCountActual = parseFloat(badCountActualInput) || 0;
+            const badCountPrev = parseFloat(badCountPrevInput) || 0;
+
+            const badCountDiff = badCountPrev > 0 
+                ? ((badCountActual / badCountPrev) * 100).toFixed(1) 
+                : '--';
+            document.getElementById('inv-bad-count-diff').textContent = badCountDiff === '--' ? '--' : `${badCountDiff}%`;
+        }
+
+        // 利益率計算ロジック
+        const calculateMetrics = () => {
+            const overallProfit = salesData[0]; 
+            const totalSalesInput = document.getElementById('total-sales-for-rate').value;
+            const totalSales = parseFloat(totalSalesInput.replace(/,/g, '')) || 0;
+            
+            const profitRateActual = totalSales > 0 ? ((overallProfit.actual / totalSales) * 100).toFixed(2) : 0;
+            const profitRateDiff = overallProfit.prevMonth > 0 ? ((overallProfit.actual / overallProfit.prevMonth) * 100 - 100).toFixed(2) : 0;
+
+            // UIの更新 (利益率関連)
+            document.getElementById('overall-profit-actual-display').textContent = formatNumber(overallProfit.actual);
+            document.getElementById('overall-profit-prev-display').textContent = formatNumber(overallProfit.prevMonth);
+
+            document.getElementById('gross-profit-rate').textContent = `${profitRateActual}%`;
+            document.getElementById('gross-profit-diff').textContent = `${profitRateDiff > 0 ? '+' : ''}${profitRateDiff} pt`;
+
+            // 他の計算結果も更新
+            salesData.forEach((_, index) => updateCalculatedRowDisplay(index));
+            calculateInventoryMetrics(); 
+        };
+
+        // 利益テーブルのレンダリング
+        const renderSalesTable = () => {
+            const tbody = document.getElementById('sales-table-body');
+            tbody.innerHTML = '';
+
+            salesData.forEach((item, index) => {
+                const tr = document.createElement('tr');
+                tr.id = `row-${index}`; 
+                tr.className = index === 0 ? 'bg-indigo-50 font-bold' : 'bg-white';
+                
+                const achievementRate = item.goal > 0 ? ((item.actual / item.goal) * 100).toFixed(1) : '-';
+                const prevMonthRatio = item.prevMonth > 0 ? ((item.actual / item.prevMonth) * 100).toFixed(1) : '-';
+
+                const isCalculatedRow = index === 0;
+
+                tr.innerHTML = `
+                    <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
+                    ${isCalculatedRow ? 
+                        `<td><div class="calculated-value" data-field="goal-display">${formatNumber(item.goal)}</div></td>
+                         <td><div class="calculated-value bg-yellow-50" data-field="actual-display">${formatNumber(item.actual)}</div></td>
+                         <td><div class="calculated-value" data-field="prevMonth-display">${formatNumber(item.prevMonth)}</div></td>
+                         <td><div class="calculated-value" data-field="prevYear-display">${formatNumber(item.prevYear)}</div></td>`
+                        :
+                        // data-array="salesData"を追加
+                        `<td><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額"></td>
+                         <td><input type="text" data-id="${index}" data-field="actual" value="${item.actual}" class="data-input profit-input bg-yellow-50 data-array-input" data-array="salesData" placeholder="実績額"></td>
+                         <td><input type="text" data-id="${index}" data-field="prevMonth" value="${item.prevMonth}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前月実績"></td>
+                         <td><input type="text" data-id="${index}" data-field="prevYear" value="${item.prevYear}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前年実績"></td>`
+                    }
+                    <td>
+                        <div class="calculated-value text-sm achievement-rate-cell ${parseFloat(achievementRate) >= 100 ? 'text-green-600' : 'text-red-600'}">${achievementRate}%</div>
+                    </td>
+                    <td>
+                        <div class="calculated-value text-sm prev-month-ratio-cell">${prevMonthRatio}%</div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+
+            // イベントリスナーを再設定
+            document.querySelectorAll('.profit-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const field = e.target.dataset.field;
+                    const cleanValue = e.target.value.replace(/,/g, '');
+                    salesData[id][field] = parseFloat(cleanValue) || 0;
+                    
+                    // ローカルで計算を先に実行
+                    calculateProfitTotals(); 
+                    updateCalculatedRowDisplay(0); 
+                    updateCalculatedRowDisplay(id); 
+                    calculateMetrics();
+                    
+                    // DBへの保存をデバウンス
+                    debounceSave(); 
+                });
+            });
+        };
+        
+        // アクションプランテーブルのレンダリング
+        const renderActionPlan = () => {
+            const tbody = document.getElementById('action-plan-body');
+            tbody.innerHTML = '';
+
+            actionPlan.forEach((action, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+
+                // data-array="actionPlan"を追加
+                tr.innerHTML = `
+                    <td class="px-3 py-2 text-sm text-gray-900 font-medium">${action.id}</td>
+                    <td class="px-3 py-2">
+                        <textarea data-id="${index}" data-field="content" class="data-input text-left p-1 h-12 data-array-input" data-array="actionPlan">${action.content}</textarea>
+                    </td>
+                    <td class="px-3 py-2">
+                        <textarea data-id="${index}" data-field="kpi" class="data-input text-left p-1 h-12 data-array-input" data-array="actionPlan">${action.kpi}</textarea>
+                    </td>
+                    <td class="px-3 py-2">
+                        <input type="text" data-id="${index}" data-field="person" value="${action.person}" class="data-input text-left p-1 data-array-input" data-array="actionPlan">
+                    </td>
+                    <td class="px-3 py-2 flex items-center space-x-2">
+                        <input type="text" data-id="${index}" data-field="deadline" value="${action.deadline}" class="data-input text-left p-1 w-20 data-array-input" data-array="actionPlan">
+                        <button data-id="${index}" class="remove-action-btn text-red-500 hover:text-red-700 text-lg leading-none" title="削除">
+                            &times;
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // イベントリスナーを再設定
+            document.querySelectorAll('#action-plan-body textarea, #action-plan-body input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const id = parseInt(e.target.dataset.id);
+                    const field = e.target.dataset.field;
+                    actionPlan[id][field] = e.target.value;
+                    debounceSave();
+                });
+            });
+        };
+        
+        /**
+         * Gemini APIを使用してアクションプランを提案
+         */
+        const handleGenerateActionPlan = async () => {
+            const generateBtn = document.getElementById('gemini-suggest-action-btn');
+            const loadingStatus = document.getElementById('gemini-loading-status');
+            
+            // 既存の課題要因を取得
+            const issueData = {
+                // Section 2
+                利益変動の主な要因_不調: document.getElementById('sales-factor-bad').value || '特になし',
+                // Section 5
+                在庫分析の主な課題と要因: document.getElementById('inventory-factor').value || '特になし',
+                // Section 6
+                店舗の課題要因_次月アクション: document.getElementById('bad-store-factor').value || '特になし'
+            };
+            
+            // 課題が入力されていない場合は警告
+            if (Object.values(issueData).every(v => v === '特になし')) {
+                alert('アクションプランを提案するため、まず Section 2, 5, 6 の「不調」または「課題」の欄に具体的な要因を入力してください。');
+                return;
+            }
+
+            generateBtn.disabled = true;
+            loadingStatus.classList.remove('hidden');
+
+            const systemPrompt = `あなたは経験豊富な経営コンサルタントです。提供された報告データから抽出した「不調要因」や「課題」に基づき、次月実行すべき具体的な「アクションプラン」を最大3つ提案してください。
+
+提案は必ず日本語のJSON配列形式で返してください。アクションは具体的で、KPIと担当者、期限が現実的に設定できるものである必要があります。
+
+JSONスキーマは以下の通りです:
+{
+  "type": "ARRAY",
+  "items": {
+    "type": "OBJECT",
+    "properties": {
+      "content": { "type": "STRING", "description": "施策内容" },
+      "kpi": { "type": "STRING", "description": "目的（KPI）" },
+      "person": { "type": "STRING", "description": "担当者（例: 氏名A、営業部長）" },
+      "deadline": { "type": "STRING", "description": "期限（例: X+1月15日、随時）" }
+    },
+    "propertyOrdering": ["content", "kpi", "person", "deadline"]
+  }
+}
+`;
+
+            const userQuery = `以下の課題に基づき、具体的なアクションプランを提案してください。
+1. 利益変動の主な要因（不調）: ${issueData.利益変動の主な要因_不調}
+2. 在庫分析の主な課題と要因: ${issueData.在庫分析の主な課題と要因}
+3. 店舗の課題要因・次月アクション: ${issueData.店舗の課題要因_次月アクション}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: {
+                    parts: [{ text: systemPrompt }]
+                },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "content": { "type": "STRING" },
+                                "kpi": { "type": "STRING" },
+                                "person": { "type": "STRING" },
+                                "deadline": { "type": "STRING" }
+                            },
+                            propertyOrdering: ["content", "kpi", "person", "deadline"]
+                        }
+                    }
+                }
+            };
+
+            try {
+                const response = await exponentialBackoffFetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API request failed with status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!jsonText) {
+                    throw new Error("Invalid response structure from Gemini API.");
+                }
+
+                const newActions = JSON.parse(jsonText);
+                
+                if (Array.isArray(newActions) && newActions.length > 0) {
+                    newActions.forEach(action => {
+                        actionIdCounter++;
+                        // 提案されたアクションを既存のactionPlanに追加
+                        actionPlan.push({ 
+                            id: actionIdCounter,
+                            content: action.content || '[内容不明]', 
+                            kpi: action.kpi || '[KPI不明]', 
+                            person: action.person || '未定', 
+                            deadline: action.deadline || '未定'
+                        });
+                    });
+
+                    renderActionPlan(); // UIを更新
+                    debounceSave();     // DBに保存
+                    
+                    console.log("Gemini: 新しいアクションプランが正常に追加されました。");
+                } else {
+                    console.warn("Gemini: 有効なアクションプランが生成されませんでした。");
+                }
+
+            } catch (error) {
+                console.error("Gemini API Error:", error);
+                alert('アクションプランの生成中にエラーが発生しました。コンソールを確認してください。');
+            } finally {
+                generateBtn.disabled = false;
+                loadingStatus.classList.add('hidden');
+            }
+        };
+
+        // データの収集 (UIとローカル変数の統合)
+        const collectCurrentData = () => {
+            // 現在選択されている店舗・年月をUIから取得
+            const selectedStoreName = document.getElementById('store-select').value;
+            const selectedYearValue = document.getElementById('year-input').value;
+            const selectedMonthValue = document.getElementById('month-input').value;
+
+            const collectedData = {
+                // Section 1
+                year: selectedYearValue,
+                month: selectedMonthValue,
+                selectedStore: selectedStoreName, // 選択された店舗名を追加
+                highlightStore: document.getElementById('highlight-store').value,
+                nextAction: document.getElementById('next-action').value,
+                
+                // Section 2 Factors
+                salesFactorGood: document.getElementById('sales-factor-good').value,
+                salesFactorBad: document.getElementById('sales-factor-bad').value,
+                
+                // Section 3 Mid-Term
+                overallMidTermData: JSON.parse(JSON.stringify(overallMidTermData)),
+
+                // Section 4 Rates
+                totalSalesForRate: document.getElementById('total-sales-for-rate').value,
+                grossProfitFactor: document.getElementById('gross-profit-factor').value,
+
+                // Section 5 Inventory
+                invSlotTotal: document.getElementById('inv-slot-total').value,
+                invActual: document.getElementById('inv-actual').value,
+                invSalesRetail: document.getElementById('inv-sales-retail').value,
+                invSalesWholesale: document.getElementById('inv-sales-wholesale').value,
+                invTotalValue: document.getElementById('inv-total-value').value,
+                invBadValue: document.getElementById('inv-bad-value').value,
+                invBadValuePrev: document.getElementById('inv-bad-value-prev').value,
+                invBadCountActual: document.getElementById('inv-bad-count-actual').value,
+                invBadCountPrev: document.getElementById('inv-bad-count-prev').value,
+                inventoryFactor: document.getElementById('inventory-factor').value,
+
+                // Section 6 Store
+                storeName: document.getElementById('store-name').value,
+                storeAchievementSummary: document.getElementById('store-achievement-summary').value,
+                goodStoreFactor: document.getElementById('good-store-factor').value,
+                badStoreFactor: document.getElementById('bad-store-factor').value,
+                otherNotes: document.getElementById('other-notes').value,
+
+                // Arrays
+                salesData: JSON.parse(JSON.stringify(salesData)),
+                actionPlan: JSON.parse(JSON.stringify(actionPlan)),
+            };
+
+            return collectedData;
+        };
+
+        // Firestoreへデータを保存
+        const saveDataToFirestore = async () => {
+            if (!currentReportRef || !userId) {
+                // 初回ロード完了前、またはFirebaseが初期化されていない場合はスキップ
+                return;
+            }
+
+            try {
+                const dataToSave = collectCurrentData();
+                dataToSave.updatedBy = userId;
+                dataToSave.updatedAt = new Date().toISOString();
+
+                // v8 Firestore構文
+                await currentReportRef.set(dataToSave, { merge: true });
+                document.getElementById('loading-status').textContent = `（保存完了: ${new Date().toLocaleTimeString()}）`;
+            } catch (error) {
+                console.error("Error saving data to Firestore:", error);
+                document.getElementById('loading-status').textContent = '（保存エラー）';
+            }
+        };
+
+        // Firestoreから取得したデータをUIとローカル変数に反映
+        const applyDataToUI = (data) => {
+            if (!data) return;
+
+            // 0. Date/Store Selects (最初に選択値を更新する必要がある)
+            selectedYear = data.year || selectedYear;
+            selectedMonth = data.month || selectedMonth;
+            selectedStore = data.selectedStore || STORE_LIST[0];
+
+            document.getElementById('year-input').value = selectedYear;
+            document.getElementById('month-input').value = selectedMonth;
+            document.getElementById('store-select').value = selectedStore;
+
+            // 1. Update simple inputs
+            document.getElementById('highlight-store').value = data.highlightStore || "";
+            document.getElementById('next-action').value = data.nextAction || "";
+            document.getElementById('sales-factor-good').value = data.salesFactorGood || "";
+            document.getElementById('sales-factor-bad').value = data.salesFactorBad || "";
+            document.getElementById('total-sales-for-rate').value = data.totalSalesForRate || "";
+            document.getElementById('gross-profit-factor').value = data.grossProfitFactor || "";
+            document.getElementById('inv-slot-total').value = data.invSlotTotal || "";
+            document.getElementById('inv-actual').value = data.invActual || "";
+            document.getElementById('inv-sales-retail').value = data.invSalesRetail || "";
+            document.getElementById('inv-sales-wholesale').value = data.invSalesWholesale || "";
+            document.getElementById('inv-total-value').value = data.invTotalValue || "";
+            document.getElementById('inv-bad-value').value = data.invBadValue || "";
+            document.getElementById('inv-bad-value-prev').value = data.invBadValuePrev || "";
+            document.getElementById('inv-bad-count-actual').value = data.invBadCountActual || "";
+            document.getElementById('inv-bad-count-prev').value = data.invBadCountPrev || "";
+            document.getElementById('inventory-factor').value = data.inventoryFactor || "";
+            document.getElementById('store-name').value = data.storeName || "";
+            document.getElementById('store-achievement-summary').value = data.storeAchievementSummary || "";
+            document.getElementById('good-store-factor').value = data.goodStoreFactor || "";
+            document.getElementById('bad-store-factor').value = data.badStoreFactor || "";
+            document.getElementById('other-notes').value = data.otherNotes || "";
+            document.getElementById('qtrGoal-input').value = data.overallMidTermData?.qtrGoal || 0;
+            document.getElementById('qtrActual-input').value = data.overallMidTermData?.qtrActual || 0;
+            document.getElementById('annualGoal-input').value = data.overallMidTermData?.annualGoal || 0;
+            document.getElementById('annualActual-input').value = data.overallMidTermData?.annualActual || 0;
+
+            // 2. Update array/object data (JSON.parse(JSON.stringify())でディープコピーを確実に行う)
+            salesData = data.salesData ? JSON.parse(JSON.stringify(data.salesData)) : JSON.parse(JSON.stringify(initialSalesData));
+            overallMidTermData = data.overallMidTermData ? JSON.parse(JSON.stringify(data.overallMidTermData)) : JSON.parse(JSON.stringify(initialOverallMidTermData));
+            actionPlan = data.actionPlan ? JSON.parse(JSON.stringify(data.actionPlan)) : JSON.parse(JSON.stringify(initialActionPlan));
+            actionIdCounter = actionPlan.length > 0 ? Math.max(...actionPlan.map(a => a.id)) : 0;
+            
+            // 3. Re-render and recalculate everything
+            calculateProfitTotals(); 
+            renderSalesTable();
+            renderActionPlan();
+            calculateMetrics();
+            calculateInventoryMetrics();
+            
+            document.getElementById('loading-status').textContent = `（同期済み: ${new Date().toLocaleTimeString()}）`;
+        };
+        
+        // レポートのロードとリアルタイムリスナーの設定
+        const loadReport = (year, month, store) => {
+            if (!db || !auth.currentUser || !year || !month || !store) return;
+            document.getElementById('loading-status').textContent = `（${store} ${year}年${month}月度 レポート読み込み中...）`;
+
+            // 以前のリスナーを解除
+            if (window.unsubscribeReportListener) {
+                window.unsubscribeReportListener();
+                window.unsubscribeReportListener = null;
+            }
+
+            // レポートIDに店舗名を追加 (例: report-2025-10-4号BP)
+            const reportId = `report-${year}-${month}-${store}`;
+            // 公開コレクションを使用
+            const reportPath = `/artifacts/${appId}/public/data/monthlyReports/${reportId}`; 
+            
+            // v8 Firestore構文
+            currentReportRef = db.collection(`artifacts/${appId}/public/data/monthlyReports`).doc(reportId);
+
+            // リアルタイムリスナーを設定
+            // v8 Firestore構文
+            window.unsubscribeReportListener = currentReportRef.onSnapshot((docSnap) => {
+                const source = docSnap.metadata.hasPendingWrites ? "Local" : "Server";
+                console.log(`Realtime data received from ${source}.`);
+                
+                if (docSnap.exists) {
+                    applyDataToUI(docSnap.data());
+                } else {
+                    // ドキュメントが存在しない場合: 初期データをセットし、DBに保存
+                    console.log(`Report for ${reportId} not found. Preparing initial save.`);
+                    applyDataToUI(collectCurrentData()); 
+                    saveDataToFirestore(); 
+                }
+            }, (error) => {
+                console.error("Firestore onSnapshot error:", error);
+                document.getElementById('loading-status').textContent = '（データ同期エラー）';
+            });
+        };
+
+        // Firebaseの初期化と認証
+        const initializeFirebase = async () => {
+            // ローカル環境（initialAuthTokenがない場合）はFirebaseをスキップし、初期UIをレンダリングする
+            if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
+                 document.getElementById('loading-status').textContent = '（注意: クラウド保存は無効です - 設定情報がありません）';
+                 renderDateSelects(); 
+                 renderStoreSelect();
+                 calculateProfitTotals(); 
+                 renderSalesTable(); 
+                 renderActionPlan(); 
+                 calculateMetrics();
+                 return; 
+            }
+            
+            try {
+                // v8 Firebase構文: firebase.initializeAppを使用
+                const app = firebase.initializeApp(firebaseConfig);
+                
+                // v8 Service access
+                db = app.firestore();
+                auth = app.auth();
+                
+                // 認証ロジック
+                if (initialAuthToken) {
+                    // v8 Auth構文: auth.signInWithCustomTokenを使用
+                    await auth.signInWithCustomToken(initialAuthToken);
+                } else {
+                    // v8 Auth構文: auth.signInAnonymouslyを使用
+                    await auth.signInAnonymously();
+                }
+
+                // 認証状態の変更を監視
+                // v8 Auth構文: auth.onAuthStateChangedを使用
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        userId = user.uid;
+                        // 認証完了後、UIの初期設定とレポートのロードを開始
+                        renderDateSelects(); // 年月をレンダリング
+                        renderStoreSelect();
+                        
+                        // 初期ロード
+                        const initialYear = document.getElementById('year-input').value;
+                        const initialMonth = document.getElementById('month-input').value;
+                        loadReport(initialYear, initialMonth, selectedStore);
+                        console.log("Firebase initialized. User ID:", userId);
+                    } else {
+                        console.log("No user signed in.");
+                        document.getElementById('loading-status').textContent = '（認証が必要です）';
+                    }
+                });
+
+            } catch (e) {
+                console.error("Firebase Initialization Error:", e);
+                document.getElementById('loading-status').textContent = '（Firebase接続失敗）';
+            }
+        };
+
+        // 年月選択ドロップダウンのレンダリング
+        const renderDateSelects = () => {
+            const yearSelect = document.getElementById('year-input');
+            const monthSelect = document.getElementById('month-input');
+            
+            // 年のオプションを生成 (2025年から2030年)
+            for (let year = YEAR_START; year <= YEAR_END; year++) {
+                const option = document.createElement('option');
+                option.value = String(year);
+                option.textContent = String(year);
+                yearSelect.appendChild(option);
+            }
+
+            // 月のオプションを生成 (01月から12月)
+            MONTH_LIST.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                monthSelect.appendChild(option);
+            });
+
+            // 初期値の設定
+            yearSelect.value = selectedYear;
+            monthSelect.value = selectedMonth;
+        };
+
+
+        // 店舗選択ドロップダウンのレンダリング
+        const renderStoreSelect = () => {
+            const select = document.getElementById('store-select');
+            select.innerHTML = ''; // クリア
+
+            STORE_LIST.forEach(store => {
+                const option = document.createElement('option');
+                option.value = store;
+                option.textContent = store;
+                select.appendChild(option);
+            });
+            
+            // 選択値の初期設定
+            select.value = selectedStore;
+        }
+
+        // UIイベントの設定
+        const setupUIEvents = () => {
+            // 単一のデータフィールドに対するリスナー設定
+            document.querySelectorAll('.data-field').forEach(input => {
+                input.addEventListener('input', debounceSave);
+            });
+
+            // 中長期実績の入力リスナー設定
+            document.querySelectorAll('.mid-term-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const field = e.target.dataset.field;
+                    const cleanValue = e.target.value.replace(/,/g, '');
+                    overallMidTermData[field] = parseFloat(cleanValue) || 0;
+                    debounceSave();
+                });
+            });
+
+            // 年月・店舗入力とレポート切替ボタンのリスナー設定
+            const handleReportDateChange = () => {
+                const year = document.getElementById('year-input').value;
+                const month = document.getElementById('month-input').value;
+                const store = document.getElementById('store-select').value;
+                
+                // 選択された値をグローバル変数に反映
+                selectedYear = year;
+                selectedMonth = month;
+                selectedStore = store; 
+                
+                // Firebaseが初期化されている場合のみロードを実行
+                if (db && auth.currentUser && year && month && store) {
+                    loadReport(year, month, store);
+                } else if (!db) {
+                     // Firebase設定がない場合、ローカルでの再計算と描画のみ実行
+                     calculateProfitTotals(); 
+                     renderSalesTable(); 
+                     renderActionPlan(); 
+                     calculateMetrics();
+                     document.getElementById('loading-status').textContent = '（注意: クラウド保存は無効です - 設定情報がありません）';
+                }
+            };
+            document.getElementById('load-report-btn').addEventListener('click', handleReportDateChange);
+            document.querySelectorAll('.report-date-input').forEach(input => {
+                 input.addEventListener('change', handleReportDateChange);
+            });
+
+
+            // アクション項目の追加
+            document.getElementById('add-action-btn').addEventListener('click', () => {
+                actionIdCounter++;
+                actionPlan.push({ 
+                    id: actionIdCounter, 
+                    content: '[新しい施策内容]', 
+                    kpi: '[目的（KPI）]', 
+                    person: '[担当者]', 
+                    deadline: '[期限]' 
+                });
+                renderActionPlan();
+                debounceSave(); // アクションプランの変更を保存
+            });
+            
+            // --- 新しい Gemini LLM 機能のリスナー設定 ---
+            document.getElementById('gemini-suggest-action-btn').addEventListener('click', handleGenerateActionPlan);
+
+
+            // アクション項目の削除リスナー (renderActionPlan内で設定)
+            document.getElementById('action-plan-body').addEventListener('click', (e) => {
+                if (e.target.classList.contains('remove-action-btn')) {
+                    const index = parseInt(e.target.dataset.id);
+                    actionPlan.splice(index, 1);
+                    renderActionPlan();
+                    debounceSave(); // アクションプランの変更を保存
+                }
+            });
+
+            // PDF/印刷ボタンクリック
+            document.getElementById('export-report-btn').addEventListener('click', () => {
+                window.print();
+            });
+        }
+
+
+        // 初期ロード
+        window.onload = function() {
+            // 初期状態ではFirebaseの設定を待つため、既存の計算ロジックは初期化後に実行
+            setupUIEvents();
+            initializeFirebase(); 
+        }
+
+    </script>
+</body>
+</html>

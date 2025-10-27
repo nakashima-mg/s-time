@@ -107,6 +107,9 @@
                 content: attr(value); /* value属性ではなく、現在の内容を表示 */
             }
         }
+        /* 固定幅のクラス */
+        .w-28 { width: 7rem !important; }
+        .w-20 { width: 5rem !important; }
     </style>
 
     <!-- Firebase SDKのインポートをv8.10.1に統一し、ローカル実行時の安定性を向上 -->
@@ -121,7 +124,6 @@
     <div id="password-overlay">
         <div class="bg-white p-8 rounded-xl shadow-2xl w-full max-w-sm">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">アクセス認証</h2>
-            <p class="text-sm text-gray-600 mb-6">このレポートにアクセスするにはパスワードを入力してください。</p>
             
             <input type="password" id="password-input" class="data-input text-center mb-4" placeholder="パスワード">
             
@@ -131,7 +133,6 @@
                 レポートを開く
             </button>
 
-            <p class="text-xs text-red-400 mt-4 text-center"></p>
         </div>
     </div>
 
@@ -179,13 +180,10 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700">特筆すべき店舗状況</label>
-                    <textarea id="highlight-store" class="data-input text-left mt-1 h-16 data-field" data-field-name="highlightStore" placeholder="例: [特筆すべき成功または課題のある店舗名]が[成功/課題の内容]で注目されます。"></textarea>
+                    <label class="block text-sm font-medium text-gray-700">トピック</label>
+                    <textarea id="highlight-store" class="data-input text-left mt-1 h-16 data-field" data-field-name="highlightStoreTopic" placeholder="例: [選択された店舗名]の車両粗利が過去最高を記録。その要因を報告します。"></textarea>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700">次月施策の重点</label>
-                    <input type="text" id="next-action" class="data-input text-left mt-1 data-field" data-field-name="nextAction" placeholder="例: [施策の具体的な名称やテーマ]を最重点とする">
-                </div>
+                <!-- 次月施策の重点を削除 -->
             </div>
         </section>
 
@@ -197,13 +195,13 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">目標額(A)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実績額(B)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月実績(C)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前年実績(D)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">達成率(B/A)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月比(B/C)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">平均粗利</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">目標額(A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">実績額(B)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">前月実績(C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">前年実績(D)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20">達成率(B/A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20">前月比(B/C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">平均粗利</th>
                         </tr>
                     </thead>
                     <tbody id="sales-table-body" class="bg-white divide-y divide-gray-200">
@@ -689,7 +687,7 @@
 
         // 初期データの定義 (DBが空の場合のフォールバック)
         const initialSalesData = [
-            { name: '全体利益', goal: 0, actual: 0, prevMonth: 0, prevYear: 0 },
+            { name: '全体利益', goal: 9900000, actual: 0, prevMonth: 0, prevYear: 0 }, // goalを手動入力値の初期値に変更
             { name: '車両粗利', goal: 5000000, actual: 4800000, prevMonth: 4500000, prevYear: 4600000 },
             { name: '営業粗利', goal: 3000000, actual: 2700000, prevMonth: 2500000, prevYear: 2800000 },
             { name: '下取り粗利(小売・AA)', goal: 200000, actual: 50000, prevMonth: 100000, prevYear: 100000 }, 
@@ -747,7 +745,7 @@
         };
 
         const initialActionPlan = [
-            { id: 1, content: '来店客数増加のためのSNSプロモーション強化', kpi: '来店客数Z人増加', person: '氏名A', deadline: 'X+1月15日' },
+            { id: 1, content: '来店客数増加のための SNS プロモーション強化', kpi: '来店客数Z人増加', person: '氏名A', deadline: 'X+1月15日' },
             { id: 2, content: '店舗スタッフ教育の徹底（商品知識向上）', kpi: '顧客満足度YY%向上', person: '氏名C', deadline: '随時' }
         ];
         
@@ -790,18 +788,17 @@
 
         // 利益カテゴリの合計を計算し、全体利益 (salesData[0]) を更新する (月次のみ)
         const calculateProfitTotals = () => {
-            const total = { goal: 0, actual: 0, prevMonth: 0, prevYear: 0 };
+            const total = { actual: 0, prevMonth: 0, prevYear: 0 };
             
             // カテゴリ 1 から salesData.length-1 の合計を計算 (月次のみ)
             for (let i = 1; i < salesData.length; i++) {
-                total.goal += parseFloat(salesData[i].goal) || 0;
+                // goal (目標額) の計算はしない (手動入力値を使用)
                 total.actual += parseFloat(salesData[i].actual) || 0;
                 total.prevMonth += parseFloat(salesData[i].prevMonth) || 0;
                 total.prevYear += parseFloat(salesData[i].prevYear) || 0;
             }
 
-            // '全体利益' (index 0) の月次実績を更新
-            salesData[0].goal = total.goal;
+            // '全体利益' (index 0) の月次実績を更新 (目標額はそのまま)
             salesData[0].actual = total.actual;
             salesData[0].prevMonth = total.prevMonth;
             salesData[0].prevYear = total.prevYear;
@@ -813,17 +810,22 @@
             const tr = document.getElementById(`row-${index}`); 
 
             if (!tr) return;
-
-            const achievementRate = item.goal > 0 ? ((item.actual / item.goal) * 100).toFixed(1) : '-';
-            const prevMonthRatio = item.prevMonth > 0 ? ((item.actual / item.prevMonth) * 100).toFixed(1) : '-';
-
-            // 1. 全体利益の行（index 0）の計算値表示を更新
+            
+            // 全体利益の目標額の入力フィールドの参照 (index 0 のみ)
             if (index === 0) {
-                tr.querySelector('[data-field="goal-display"]').textContent = formatNumber(item.goal);
+                 const overallGoalInput = tr.querySelector('#goal-input-0'); // IDで参照
+                 if (overallGoalInput) {
+                    // 目標額が手動入力なので、フォーマットして表示
+                    overallGoalInput.value = formatNumber(item.goal); 
+                 }
                 tr.querySelector('[data-field="actual-display"]').textContent = formatNumber(item.actual);
                 tr.querySelector('[data-field="prevMonth-display"]').textContent = formatNumber(item.prevMonth);
                 tr.querySelector('[data-field="prevYear-display"]').textContent = formatNumber(item.prevYear);
             }
+
+            const achievementRate = item.goal > 0 ? ((item.actual / item.goal) * 100).toFixed(1) : '-';
+            const prevMonthRatio = item.prevMonth > 0 ? ((item.actual / item.prevMonth) * 100).toFixed(1) : '-';
+
 
             // 2. 達成率セルを更新
             const achievementCell = tr.querySelector('.achievement-rate-cell');
@@ -983,24 +985,25 @@
                 tr.innerHTML = `
                     <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
                     ${isCalculatedRow ? 
-                        `<td><div class="calculated-value" data-field="goal-display">${formatNumber(item.goal)}</div></td>
-                         <td><div class="calculated-value bg-yellow-50" data-field="actual-display">${formatNumber(item.actual)}</div></td>
-                         <td><div class="calculated-value" data-field="prevMonth-display">${formatNumber(item.prevMonth)}</div></td>
-                         <td><div class="calculated-value" data-field="prevYear-display">${formatNumber(item.prevYear)}</div></td>`
+                        // 全体利益の目標額(A)は手動入力フィールドに変更
+                        `<td class="w-28"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額" id="goal-input-0"></td>
+                         <td class="w-28"><div class="calculated-value bg-yellow-50" data-field="actual-display">${formatNumber(item.actual)}</div></td>
+                         <td class="w-28"><div class="calculated-value" data-field="prevMonth-display">${formatNumber(item.prevMonth)}</div></td>
+                         <td class="w-28"><div class="calculated-value" data-field="prevYear-display">${formatNumber(item.prevYear)}</div></td>`
                         :
                         // data-array="salesData"を追加
-                        `<td><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額"></td>
-                         <td><input type="text" data-id="${index}" data-field="actual" value="${item.actual}" class="data-input profit-input bg-yellow-50 data-array-input" data-array="salesData" placeholder="実績額"></td>
-                         <td><input type="text" data-id="${index}" data-field="prevMonth" value="${item.prevMonth}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前月実績"></td>
-                         <td><input type="text" data-id="${index}" data-field="prevYear" value="${item.prevYear}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前年実績"></td>`
+                        `<td class="w-28"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額"></td>
+                         <td class="w-28"><input type="text" data-id="${index}" data-field="actual" value="${item.actual}" class="data-input profit-input bg-yellow-50 data-array-input" data-array="salesData" placeholder="実績額"></td>
+                         <td class="w-28"><input type="text" data-id="${index}" data-field="prevMonth" value="${item.prevMonth}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前月実績"></td>
+                         <td class="w-28"><input type="text" data-id="${index}" data-field="prevYear" value="${item.prevYear}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前年実績"></td>`
                     }
-                    <td>
+                    <td class="w-20">
                         <div class="calculated-value text-sm achievement-rate-cell ${parseFloat(achievementRate) >= 100 ? 'text-green-600' : 'text-red-600'}">${achievementRate}%</div>
                     </td>
-                    <td>
+                    <td class="w-20">
                         <div class="calculated-value text-sm prev-month-ratio-cell">${prevMonthRatio}%</div>
                     </td>
-                    <td>
+                    <td class="w-28">
                         <div class="calculated-value text-sm avg-profit-cell" data-avg-id="${index}">--</div>
                     </td>
                 `;
@@ -1018,6 +1021,15 @@
                     
                     // ローカルで計算を先に実行
                     calculateProfitTotals(); 
+                    
+                    // 全体利益の目標額は手動入力なので、手動で入力された値を取得し直す
+                    if (id === 0) {
+                         const overallGoalInput = document.getElementById('goal-input-0'); // IDで参照
+                         if (overallGoalInput) {
+                            const cleanGoalValue = overallGoalInput.value.replace(/,/g, '');
+                            salesData[0].goal = parseFloat(cleanGoalValue) || 0;
+                         }
+                    }
                     updateCalculatedRowDisplay(0); 
                     updateCalculatedRowDisplay(id); 
                     calculateMetrics();
@@ -1082,8 +1094,8 @@
                 year: selectedYearValue,
                 month: selectedMonthValue,
                 selectedStore: selectedStoreName, // 選択された店舗名を追加
-                highlightStore: document.getElementById('highlight-store').value,
-                nextAction: document.getElementById('next-action').value,
+                highlightStoreTopic: document.getElementById('highlight-store').value, // 変更
+                // nextAction を削除
                 
                 // Section 2 Factors
                 salesFactorGood: document.getElementById('sales-factor-good').value,
@@ -1202,8 +1214,8 @@
             document.getElementById('store-select').value = selectedStore;
 
             // 1. Update simple inputs
-            document.getElementById('highlight-store').value = data.highlightStore || "";
-            document.getElementById('next-action').value = data.nextAction || "";
+            document.getElementById('highlight-store').value = data.highlightStoreTopic || ""; // 変更
+            // nextAction を削除
             document.getElementById('sales-factor-good').value = data.salesFactorGood || "";
             document.getElementById('sales-factor-bad').value = data.salesFactorBad || "";
             document.getElementById('total-sales-for-rate').value = data.totalSalesForRate || "";
@@ -1348,7 +1360,8 @@
                 auth = app.auth();
                 
                 // 認証ロジック (initialAuthTokenはCanvasでのみ使用)
-                if (initialAuthToken) {
+                // initialAuthTokenが存在し、かつ空文字ではない場合にのみカスタムトークン認証を試みる
+                if (initialAuthToken && initialAuthToken.length > 0) { 
                     // v8 Auth構文: auth.signInWithCustomTokenを使用
                     await auth.signInWithCustomToken(initialAuthToken);
                 } else {

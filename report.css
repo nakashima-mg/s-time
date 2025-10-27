@@ -441,22 +441,50 @@
     <script>
         // ローカル環境での安定動作のため、v8のSDKに合わせる
         
-        // Firestoreセットアップのためのグローバル変数
-        // v8 SDKでは、firebase.auth() や firebase.firestore() を使用してサービスにアクセスします。
-        
-       // GitHub PagesなどのWebサーバーで実行するための固定設定
-        const firebaseConfig = {
-            apiKey:"AIzaSyBJK7rew7oXl7BR3NuHj7eAuBxH0-57K5k",
+        // *******************************************************************
+        // 【重要】GitHub Pagesで実行するための固定設定（ユーザー提供情報）
+        // *******************************************************************
+        const GITHUB_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyBJK7rew7oXl7BR3NuHj7eAuBxH0-57K5k",
             authDomain: "monthly-report-tool.firebaseapp.com",
             projectId: "monthly-report-tool",
-            storageBucket:"monthly-report-tool.firebasestorage.app",
+            storageBucket: "monthly-report-tool.firebasestorage.app",
             messagingSenderId: "716526992795",
             appId: "1:716526992795:web:86aadeb264d5d75c9ff53e"
         };
-        // Firebase Consoleで取得したprojectIdの値を直接使用
-        const appId = firebaseConfig.projectId; 
-        // 外部サーバーではカスタム認証トークンは使用しないため、nullまたは不要な行として扱う
-        const initialAuthToken = null;
+        
+        // Canvas環境から提供される変数（ローカル環境では undefined/null）
+        const provided_app_id = typeof __app_id !== 'undefined' ? __app_id : null;
+        const provided_firebase_config = typeof __firebase_config !== 'undefined' ? __firebase_config : null;
+        const provided_initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // 実際のFirebase設定値の決定
+        let firebaseConfig = {};
+        let initialAuthToken = null;
+        let isFirebaseEnabled = false;
+
+        if (provided_app_id && provided_firebase_config && provided_initial_auth_token) {
+            // 1. Canvas環境で実行されている場合 (優先)
+            firebaseConfig = JSON.parse(provided_firebase_config);
+            initialAuthToken = provided_initial_auth_token;
+            isFirebaseEnabled = true;
+            console.log("Environment: Canvas (Firebase Enabled)");
+        } else if (GITHUB_FIREBASE_CONFIG.apiKey && GITHUB_FIREBASE_CONFIG.projectId) {
+            // 2. GitHub PagesなどのWebサーバーで実行されている場合 (固定設定を使用)
+            firebaseConfig = GITHUB_FIREBASE_CONFIG;
+            initialAuthToken = null; // カスタム認証トークンは使用しない
+            isFirebaseEnabled = true;
+            console.log("Environment: External Server (Fixed Firebase Config Used)");
+        } else {
+            // 3. Firebase設定が一切ない場合 (ローカルファイルなど)
+            isFirebaseEnabled = false;
+            console.log("Environment: Local/No Config (Firebase Disabled)");
+        }
+        
+        // appId の決定 (Canvas提供値 > 固定設定値 > デフォルト)
+        const appId = provided_app_id || firebaseConfig.projectId || 'default-app-id';
+
+        // *******************************************************************
 
         let db, auth, userId;
         let currentReportRef = null; // 現在リスニング中のドキュメント参照
@@ -492,7 +520,10 @@
         
         // UIからもアクセスできるようにグローバル変数として定義
         let selectedYear = String(new Date().getFullYear());
+        if(selectedYear < YEAR_START || selectedYear > YEAR_END) selectedYear = String(YEAR_START);
+        
         let selectedMonth = String(new Date().getMonth() + 1).padStart(2, '0');
+        
         let selectedStore = STORE_LIST[0]; // 初期値はリストの最初の店舗
 
         // ライブデータとして使う変数 (初期値はフォールバックデータ)
@@ -504,6 +535,8 @@
         // Debounce utility to prevent excessive writes
         let saveTimeout;
         const debounceSave = () => {
+            if (!isFirebaseEnabled) return; // Firebase無効時は保存処理をスキップ
+            
             if (saveTimeout) clearTimeout(saveTimeout);
             // データの整合性を保つため、計算処理を先に実行
             calculateProfitTotals(); 
@@ -879,7 +912,8 @@
         
         // レポートのロードとリアルタイムリスナーの設定
         const loadReport = (year, month, store) => {
-            if (!db || !auth.currentUser || !year || !month || !store) return;
+            if (!isFirebaseEnabled || !db || !auth.currentUser || !year || !month || !store) return; // Firebase無効時はスキップ
+            
             document.getElementById('loading-status').textContent = `（${store} ${year}年${month}月度 レポート読み込み中...）`;
 
             // 以前のリスナーを解除
@@ -890,8 +924,6 @@
 
             // レポートIDに店舗名を追加 (例: report-2025-10-4号BP)
             const reportId = `report-${year}-${month}-${store}`;
-            // 公開コレクションを使用
-            const reportPath = `/artifacts/${appId}/public/data/monthlyReports/${reportId}`; 
             
             // v8 Firestore構文
             currentReportRef = db.collection(`artifacts/${appId}/public/data/monthlyReports`).doc(reportId);
@@ -918,9 +950,11 @@
 
         // Firebaseの初期化と認証
         const initializeFirebase = async () => {
-            // ローカル環境（initialAuthTokenがない場合）はFirebaseをスキップし、初期UIをレンダリングする
-            if (!firebaseConfig || Object.keys(firebaseConfig).length === 0) {
-                 document.getElementById('loading-status').textContent = '（注意: クラウド保存は無効です - 設定情報がありません）';
+            // ローカル環境（isFirebaseEnabledがfalseの場合）はFirebaseをスキップ
+            if (!isFirebaseEnabled) {
+                 document.getElementById('loading-status').textContent = '（注意: クラウド保存・同期は無効です - 設定情報が不足しています）';
+                 
+                 // Firebaseが使用できない場合でも、UIの初期化と計算は行う
                  renderDateSelects(); 
                  renderStoreSelect();
                  calculateProfitTotals(); 
@@ -938,11 +972,12 @@
                 db = app.firestore();
                 auth = app.auth();
                 
-                // 認証ロジック
+                // 認証ロジック (initialAuthTokenはCanvasでのみ使用)
                 if (initialAuthToken) {
                     // v8 Auth構文: auth.signInWithCustomTokenを使用
                     await auth.signInWithCustomToken(initialAuthToken);
                 } else {
+                    // GitHub Pagesなど外部環境の場合は匿名認証
                     // v8 Auth構文: auth.signInAnonymouslyを使用
                     await auth.signInAnonymously();
                 }
@@ -959,7 +994,8 @@
                         // 初期ロード
                         const initialYear = document.getElementById('year-input').value;
                         const initialMonth = document.getElementById('month-input').value;
-                        loadReport(initialYear, initialMonth, selectedStore);
+                        const initialStore = document.getElementById('store-select').value;
+                        loadReport(initialYear, initialMonth, initialStore);
                         console.log("Firebase initialized. User ID:", userId);
                     } else {
                         console.log("No user signed in.");
@@ -969,7 +1005,7 @@
 
             } catch (e) {
                 console.error("Firebase Initialization Error:", e);
-                document.getElementById('loading-status').textContent = '（Firebase接続失敗）';
+                document.getElementById('loading-status').textContent = '（Firebase接続失敗 - 詳細はコンソールを確認）';
             }
         };
 
@@ -1044,16 +1080,16 @@
                 selectedMonth = month;
                 selectedStore = store; 
                 
-                // Firebaseが初期化されている場合のみロードを実行
-                if (db && auth.currentUser && year && month && store) {
+                // Firebaseが有効で初期化されている場合のみロードを実行
+                if (isFirebaseEnabled) {
                     loadReport(year, month, store);
-                } else if (!db) {
-                     // Firebase設定がない場合、ローカルでの再計算と描画のみ実行
+                } else {
+                     // Firebaseが無効の場合、ローカルでの再計算と描画のみ実行
                      calculateProfitTotals(); 
                      renderSalesTable(); 
                      renderActionPlan(); 
                      calculateMetrics();
-                     document.getElementById('loading-status').textContent = '（注意: クラウド保存は無効です - 設定情報がありません）';
+                     document.getElementById('loading-status').textContent = '（注意: クラウド保存・同期は無効です - 設定情報が不足しています）';
                 }
             };
             document.getElementById('load-report-btn').addEventListener('click', handleReportDateChange);
@@ -1095,9 +1131,19 @@
 
         // 初期ロード
         window.onload = function() {
-            // 初期状態ではFirebaseの設定を待つため、既存の計算ロジックは初期化後に実行
+            // UIイベントを設定
             setupUIEvents();
+            
+            // Firebaseの初期化（有効な場合のみ実行）
             initializeFirebase(); 
+
+            // Firebaseが有効でない場合、初期値での描画を行う
+            if (!isFirebaseEnabled) {
+                const initialYear = document.getElementById('year-input').value;
+                const initialMonth = document.getElementById('month-input').value;
+                const initialStore = document.getElementById('store-select').value;
+                handleReportDateChange(); // 初期値でUIを更新し、計算を実行
+            }
         }
 
     </script>

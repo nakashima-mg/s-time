@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>月次 営業報告データ入力・計算ツール</title>
+    <title>月次 利益・店舗報告ツール</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -104,7 +104,7 @@
 <body class="p-4 md:p-8">
     <div id="app" class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
         <h1 class="text-3xl font-bold text-gray-800 mb-6 border-b pb-2">
-            月次 利益報告データ入力・計算ツール
+            月次 利益・店舗報告ツール
         </h1>
         <p class="text-gray-500 mb-8">
             利益項目に基づき、実績と目標対比の計算を行います。
@@ -169,6 +169,7 @@
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前年実績(D)</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">達成率(B/A)</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">前月比(B/C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">平均粗利</th>
                         </tr>
                     </thead>
                     <tbody id="sales-table-body" class="bg-white divide-y divide-gray-200">
@@ -194,8 +195,12 @@
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">四半期目標</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">四半期実績</th>
+                            <!-- NEW: 達成率 -->
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">四半期達成率</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">通年目標</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">通年実績</th>
+                            <!-- NEW: 達成率 -->
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">通年達成率</th>
                         </tr>
                     </thead>
                     <tbody id="mid-term-table-body" class="bg-white divide-y divide-gray-200">
@@ -203,8 +208,12 @@
                             <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 bg-indigo-50 font-bold">全体利益</td>
                             <td><input type="text" id="qtrGoal-input" data-field="qtrGoal" value="30000000" class="data-input mid-term-input" placeholder="目標"></td>
                             <td><input type="text" id="qtrActual-input" data-field="qtrActual" value="28800000" class="data-input mid-term-input" placeholder="実績"></td>
+                            <!-- NEW: 達成率表示 -->
+                            <td><div id="qtr-achievement-rate" class="calculated-value text-sm">--</div></td>
                             <td><input type="text" id="annualGoal-input" data-field="annualGoal" value="120000000" class="data-input mid-term-input" placeholder="目標"></td>
                             <td><input type="text" id="annualActual-input" data-field="annualActual" value="115600000" class="data-input mid-term-input" placeholder="実績"></td>
+                            <!-- NEW: 達成率表示 -->
+                            <td><div id="annual-achievement-rate" class="calculated-value text-sm">--</div></td>
                         </tr>
                     </tbody>
                 </table>
@@ -272,9 +281,11 @@
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">総掲載枠 (A)</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">実掲載台数 (B)</th>
                             <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">販売台数 (C)</th>
-                            <!-- ヘッダーを修正 -->
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(総)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(実)</th>
+                            <!-- NEW: 掲載率 -->
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">掲載率(B/A)</th>
+                            <!-- 回転率ヘッダーの変更 -->
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(小売)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">回転率(総販)</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -283,9 +294,11 @@
                             <td><input type="text" id="inv-slot-total" value="100" class="data-input inv-input data-field" data-field-name="invSlotTotal" placeholder="台数"></td>
                             <td><input type="text" id="inv-actual" value="80" class="data-input inv-input data-field" data-field-name="invActual" placeholder="台数"></td>
                             <td><div id="inv-sales-total" class="calculated-value bg-yellow-50 text-sm">--</div></td>
-                            <!-- 計算結果の表示単位を修正 -->
-                            <td><div id="inv-rate-slot" class="calculated-value text-sm">--</div></td>
-                            <td><div id="inv-rate-actual" class="calculated-value text-sm">--</div></td>
+                            <!-- NEW: 掲載率表示 -->
+                            <td><div id="inv-placement-rate" class="calculated-value text-sm">--</div></td>
+                            <!-- 回転率の表示IDを変更 -->
+                            <td><div id="inv-rate-retail" class="calculated-value text-sm">--</div></td>
+                            <td><div id="inv-rate-total" class="calculated-value text-sm">--</div></td>
                         </tr>
                     </tbody>
                 </table>
@@ -369,9 +382,147 @@
             </div>
         </section>
 
-        <!-- 6. 店舗の状況と特記事項 (Old 5) -->
+        <!-- 6. 反響分析 (NEW SIMPLIFIED INPUT) -->
+        <section class="mb-8 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">6. 反響分析</h2>
+            
+            <div class="grid grid-cols-1 gap-6">
+                <!-- ① 経路別反響値 (テーブル形式に変更) -->
+                <div class="space-y-3 p-3 bg-white rounded-lg border">
+                    <h3 class="font-medium text-lg text-gray-700 mb-2">① 経路別反響値 (件数/%)</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">経路</th>
+                                    <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">当月 (件数)</th>
+                                    <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">当月 (%)</th>
+                                    <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">先月 (件数)</th>
+                                    <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/5">昨年 (件数)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <!-- メール -->
+                                <tr>
+                                    <td class="px-3 py-2 text-sm text-gray-900">1. メール</td>
+                                    <td><input type="text" id="react-val-mail" value="50" class="data-input reaction-input text-right data-field" data-field-name="reactValMail" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-mail-percent" value="52.6%" class="data-input reaction-input text-right data-field" data-field-name="reactValMailPercent" placeholder="%"></td>
+                                    <td><input type="text" id="react-val-mail-prev" value="45" class="data-input reaction-input text-right data-field" data-field-name="reactValMailPrev" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-mail-lastyear" value="55" class="data-input reaction-input text-right data-field" data-field-name="reactValMailLastYear" placeholder="件数"></td>
+                                </tr>
+                                <!-- 電話 -->
+                                <tr>
+                                    <td class="px-3 py-2 text-sm text-gray-900">2. 電話</td>
+                                    <td><input type="text" id="react-val-tel" value="30" class="data-input reaction-input text-right data-field" data-field-name="reactValTel" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-tel-percent" value="31.6%" class="data-input reaction-input text-right data-field" data-field-name="reactValTelPercent" placeholder="%"></td>
+                                    <td><input type="text" id="react-val-tel-prev" value="25" class="data-input reaction-input text-right data-field" data-field-name="reactValTelPrev" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-tel-lastyear" value="35" class="data-input reaction-input text-right data-field" data-field-name="reactValTelLastYear" placeholder="件数"></td>
+                                </tr>
+                                <!-- アポ無し -->
+                                <tr>
+                                    <td class="px-3 py-2 text-sm text-gray-900">3. アポ無し</td>
+                                    <td><input type="text" id="react-val-walkin" value="15" class="data-input reaction-input text-right data-field" data-field-name="reactValWalkin" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-walkin-percent" value="15.8%" class="data-input reaction-input text-right data-field" data-field-name="reactValWalkinPercent" placeholder="%"></td>
+                                    <td><input type="text" id="react-val-walkin-prev" value="10" class="data-input reaction-input text-right data-field" data-field-name="reactValWalkinPrev" placeholder="件数"></td>
+                                    <td><input type="text" id="react-val-walkin-lastyear" value="12" class="data-input reaction-input text-right data-field" data-field-name="reactValWalkinLastYear" placeholder="件数"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- ② 経路別誘致率 -->
+                    <div class="space-y-3 p-3 bg-white rounded-lg border">
+                        <h3 class="font-medium text-lg text-gray-700 mb-2">② 経路別誘致率 (%)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">経路</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">当月 (%)</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">先月 (%)</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">昨年 (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <!-- メール -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">1. メール</td>
+                                        <td><input type="text" id="react-rate-invite-mail" value="40%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteMail" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-invite-mail-prev" value="38%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteMailPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-invite-mail-lastyear" value="42%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteMailLastYear" placeholder="%"></td>
+                                    </tr>
+                                    <!-- 電話 -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">2. 電話</td>
+                                        <td><input type="text" id="react-rate-invite-tel" value="60%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteTel" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-invite-tel-prev" value="65%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteTelPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-invite-tel-lastyear" value="55%" class="data-input reaction-input text-right data-field" data-field-name="reactRateInviteTelLastYear" placeholder="%"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- ③ 成約率 -->
+                    <div class="space-y-3 p-3 bg-white rounded-lg border">
+                        <h3 class="font-medium text-lg text-gray-700 mb-2">③ 成約率 (%)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-100">
+                                    <tr>
+                                        <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">項目</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">当月 (%)</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">先月 (%)</th>
+                                        <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">昨年 (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <!-- 総成約率 -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">1. 総成約率</td>
+                                        <td><input type="text" id="react-rate-close-total" value="15%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTotal" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-total-prev" value="14%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTotalPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-total-lastyear" value="16%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTotalLastYear" placeholder="%"></td>
+                                    </tr>
+                                    <!-- メール -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">2. メール</td>
+                                        <td><input type="text" id="react-rate-close-mail" value="10%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseMail" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-mail-prev" value="11%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseMailPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-mail-lastyear" value="9%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseMailLastYear" placeholder="%"></td>
+                                    </tr>
+                                    <!-- TEL -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">3. TEL</td>
+                                        <td><input type="text" id="react-rate-close-tel" value="20%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTel" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-tel-prev" value="19%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTelPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-tel-lastyear" value="21%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseTelLastYear" placeholder="%"></td>
+                                    </tr>
+                                    <!-- アポ無し -->
+                                    <tr>
+                                        <td class="px-3 py-2 text-sm text-gray-900">4. アポ無し</td>
+                                        <td><input type="text" id="react-rate-close-walkin" value="25%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseWalkin" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-walkin-prev" value="22%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseWalkinPrev" placeholder="%"></td>
+                                        <td><input type="text" id="react-rate-close-walkin-lastyear" value="28%" class="data-input reaction-input text-right data-field" data-field-name="reactRateCloseWalkinLastYear" placeholder="%"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                <label class="block text-sm font-medium text-gray-700">反響の変動要因と課題</label>
+                <textarea id="reaction-factor" class="data-input text-left h-16 mt-1 data-field" data-field-name="reactionFactor" placeholder="例：Web経由の反響数は増加したが、質が低下し成約率が減少した"></textarea>
+            </div>
+        </section>
+
+        <!-- 7. 店舗の状況と特記事項 (Old 6) -->
         <section class="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">6. 店舗の状況と特記事項</h2>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">7. 店舗の状況と特記事項</h2>
             
             <div class="space-y-4">
                 <h3 class="text-lg font-medium text-yellow-800 mb-2">報告対象店舗の状況</h3>
@@ -405,9 +556,9 @@
             </div>
         </section>
 
-        <!-- 7. 次月アクションプラン (Old 6) -->
+        <!-- 8. 次月アクションプラン (Old 7) -->
         <section class="mb-8">
-            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">7. 次月アクションプラン</h2>
+            <h2 class="text-xl font-semibold text-gray-800 mb-4 border-b pb-2">8. 次月アクションプラン</h2>
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -514,6 +665,48 @@
             annualGoal: 120000000,
             annualActual: 115600000
         };
+        
+        // NEW: 反響分析の初期データ
+        const initialReactionData = {
+            // ① 経路別反響値 (件数/%)
+            reactValMail: 50,
+            reactValMailPercent: '52.6%', 
+            reactValMailPrev: 45, // NEW
+            reactValMailLastYear: 55, // NEW
+            reactValTel: 30,
+            reactValTelPercent: '31.6%',
+            reactValTelPrev: 25, // NEW
+            reactValTelLastYear: 35, // NEW
+            reactValWalkin: 15,
+            reactValWalkinPercent: '15.8%',
+            reactValWalkinPrev: 10, // NEW
+            reactValWalkinLastYear: 12, // NEW
+            // ② 経路別誘致率 (%)
+            reactRateInviteMail: '40%',
+            reactRateInviteMailPrev: '38%', // NEW
+            reactRateInviteMailLastYear: '42%', // NEW
+            reactRateInviteTel: '60%',
+            reactRateInviteTelPrev: '65%', // NEW
+            reactRateInviteTelLastYear: '55%', // NEW
+            // ③ 成約率 (%)
+            reactRateCloseTotal: '15%',
+            reactRateCloseTotalPrev: '14%', // NEW
+            reactRateCloseTotalLastYear: '16%', // NEW
+            reactRateCloseMail: '10%',
+            reactRateCloseMailPrev: '11%', // NEW
+            reactRateCloseMailLastYear: '9%', // NEW
+            reactRateCloseTel: '20%',
+            reactRateCloseTelPrev: '19%', // NEW
+            reactRateCloseTelLastYear: '21%', // NEW
+            reactRateCloseWalkin: '25%',
+            reactRateCloseWalkinPrev: '22%', // NEW
+            reactRateCloseWalkinLastYear: '28%', // NEW
+            
+            // ④ 効率指標 (削除されたため初期値も削除)
+
+            // その他
+            reactionFactor: "Web経由の反響数は増加したが、質が低下し成約率が減少した"
+        };
 
         const initialActionPlan = [
             { id: 1, content: '来店客数増加のためのSNSプロモーション強化', kpi: '来店客数Z人増加', person: '氏名A', deadline: 'X+1月15日' },
@@ -531,8 +724,13 @@
         // ライブデータとして使う変数 (初期値はフォールバックデータ)
         let salesData = JSON.parse(JSON.stringify(initialSalesData));
         let overallMidTermData = JSON.parse(JSON.stringify(initialOverallMidTermData));
+        let reactionData = JSON.parse(JSON.stringify(initialReactionData)); // NEW
         let actionPlan = JSON.parse(JSON.stringify(initialActionPlan));
         let actionIdCounter = initialActionPlan.length;
+        
+        // NEW GLOBAL VARIABLE: 小売販売台数 (平均粗利の分母)
+        let globalRetailSalesCount = 0; 
+
 
         // Debounce utility to prevent excessive writes
         let saveTimeout;
@@ -606,7 +804,43 @@
             if (prevMonthCell) {
                 prevMonthCell.textContent = `${prevMonthRatio}%`;
             }
+            
+            // 4. 平均粗利セルを更新 (車両粗利: index 1, 営業粗利: index 2 のみ)
+            const avgProfitCell = tr.querySelector('.avg-profit-cell');
+            if (avgProfitCell) {
+                if ((index === 1 || index === 2) && globalRetailSalesCount > 0) {
+                    const avgProfit = item.actual / globalRetailSalesCount;
+                    avgProfitCell.textContent = formatNumber(avgProfit);
+                } else {
+                    avgProfitCell.textContent = '--';
+                }
+            }
         };
+
+        // 中長期実績の計算と表示を更新するロジック
+        const calculateMidTermMetrics = () => {
+            const qtrGoal = parseFloat(overallMidTermData.qtrGoal) || 0;
+            const qtrActual = parseFloat(overallMidTermData.qtrActual) || 0;
+            const annualGoal = parseFloat(overallMidTermData.annualGoal) || 0;
+            const annualActual = parseFloat(overallMidTermData.annualActual) || 0;
+
+            // 四半期達成率
+            const qtrRate = qtrGoal > 0 ? ((qtrActual / qtrGoal) * 100).toFixed(1) : '--';
+            document.getElementById('qtr-achievement-rate').textContent = qtrRate === '--' ? '--' : `${qtrRate}%`;
+
+            // 通年達成率
+            const annualRate = annualGoal > 0 ? ((annualActual / annualGoal) * 100).toFixed(1) : '--';
+            document.getElementById('annual-achievement-rate').textContent = annualRate === '--' ? '--' : `${annualRate}%`;
+            
+            // 入力値自体は mid-term-input のリスナーで更新済み
+        };
+
+        // 反響分析の計算ロジック (自動計算を削除し、ダミー化)
+        const calculateReactionMetrics = () => {
+            // 自動計算は行わず、UIの再描画のみをトリガーする (今回は不要だが、ロジックを維持)
+            // 既存のコードが calculateMetrics を実行しているため、ここで何もしないことで自動計算を停止させる
+        };
+
 
         // 在庫回転率分析の計算ロジック
         const calculateInventoryMetrics = () => {
@@ -618,18 +852,25 @@
 
             const invSlotTotal = parseFloat(invSlotTotalInput) || 0;
             const invActual = parseFloat(invActualInput) || 0;
-            const invSalesRetail = parseFloat(invSalesRetailInput) || 0;
+            const invSalesRetail = parseFloat(invSalesRetailInput) || 0; // 小売販売台数
             const invSalesWholesale = parseFloat(wholesaleSalesInput) || 0;
-            const invSales = invSalesRetail + invSalesWholesale; // 合計販売台数 (C)
+            const invSalesTotal = invSalesRetail + invSalesWholesale; // 合計販売台数 (C)
 
-            document.getElementById('inv-sales-total').textContent = formatNumber(invSales);
+            document.getElementById('inv-sales-total').textContent = formatNumber(invSalesTotal);
 
-            const rateSlot = invSlotTotal > 0 ? ((invSales / invSlotTotal) * 100).toFixed(1) : '--';
-            const rateActual = invActual > 0 ? ((invSales / invActual) * 100).toFixed(1) : '--';
+            // NEW: 掲載率 (実掲載台数 / 総掲載枠)
+            const placementRate = invSlotTotal > 0 ? ((invActual / invSlotTotal) * 100).toFixed(1) : '--';
+            document.getElementById('inv-placement-rate').textContent = placementRate === '--' ? '--' : `${placementRate} %`;
 
-            document.getElementById('inv-rate-slot').textContent = rateSlot === '--' ? '--' : `${rateSlot} %`;
-            document.getElementById('inv-rate-actual').textContent = rateActual === '--' ? '--' : `${rateActual} %`;
+            // NEW: 回転率(小売) (小売販売台数 / 実掲載台数)
+            const rateRetail = invActual > 0 ? ((invSalesRetail / invActual) * 100).toFixed(1) : '--';
+            document.getElementById('inv-rate-retail').textContent = rateRetail === '--' ? '--' : `${rateRetail} %`;
             
+            // NEW: 回転率(総販) (合計販売台数 / 実掲載台数)
+            const rateTotal = invActual > 0 ? ((invSalesTotal / invActual) * 100).toFixed(1) : '--';
+            document.getElementById('inv-rate-total').textContent = rateTotal === '--' ? '--' : `${rateTotal} %`;
+
+
             // ② 不良在庫率の計算 (金額ベース)
             const invTotalValueInput = document.getElementById('inv-total-value').value.replace(/,/g, '');
             const invBadValueInput = document.getElementById('inv-bad-value').value.replace(/,/g, '');
@@ -661,6 +902,10 @@
 
         // 利益率計算ロジック
         const calculateMetrics = () => {
+            // Retrieve Retail Sales Count (denominator for Avg Profit)
+            const invSalesRetailInput = document.getElementById('inv-sales-retail').value.replace(/,/g, '');
+            globalRetailSalesCount = parseFloat(invSalesRetailInput) || 0; // Set globally
+
             const overallProfit = salesData[0]; 
             const totalSalesInput = document.getElementById('total-sales-for-rate').value;
             const totalSales = parseFloat(totalSalesInput.replace(/,/g, '')) || 0;
@@ -678,6 +923,8 @@
             // 他の計算結果も更新
             salesData.forEach((_, index) => updateCalculatedRowDisplay(index));
             calculateInventoryMetrics(); 
+            calculateReactionMetrics(); // NEW
+            calculateMidTermMetrics(); // NEW
         };
 
         // 利益テーブルのレンダリング
@@ -714,6 +961,9 @@
                     </td>
                     <td>
                         <div class="calculated-value text-sm prev-month-ratio-cell">${prevMonthRatio}%</div>
+                    </td>
+                    <td>
+                        <div class="calculated-value text-sm avg-profit-cell" data-avg-id="${index}">--</div>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -820,7 +1070,51 @@
                 invBadCountPrev: document.getElementById('inv-bad-count-prev').value,
                 inventoryFactor: document.getElementById('inventory-factor').value,
 
-                // Section 6 Store
+                // Section 6 Reaction
+                reactionData: {
+                    // ① 経路別反響値
+                    reactValMail: document.getElementById('react-val-mail').value,
+                    reactValMailPercent: document.getElementById('react-val-mail-percent').value, 
+                    reactValMailPrev: document.getElementById('react-val-mail-prev').value, // NEW
+                    reactValMailLastYear: document.getElementById('react-val-mail-lastyear').value, // NEW
+                    reactValTel: document.getElementById('react-val-tel').value,
+                    reactValTelPercent: document.getElementById('react-val-tel-percent').value, 
+                    reactValTelPrev: document.getElementById('react-val-tel-prev').value, // NEW
+                    reactValTelLastYear: document.getElementById('react-val-tel-lastyear').value, // NEW
+                    reactValWalkin: document.getElementById('react-val-walkin').value,
+                    reactValWalkinPercent: document.getElementById('react-val-walkin-percent').value, 
+                    reactValWalkinPrev: document.getElementById('react-val-walkin-prev').value, // NEW
+                    reactValWalkinLastYear: document.getElementById('react-val-walkin-lastyear').value, // NEW
+                    
+                    // ② 経路別誘致率
+                    reactRateInviteMail: document.getElementById('react-rate-invite-mail').value,
+                    reactRateInviteMailPrev: document.getElementById('react-rate-invite-mail-prev').value, // NEW
+                    reactRateInviteMailLastYear: document.getElementById('react-rate-invite-mail-lastyear').value, // NEW
+                    reactRateInviteTel: document.getElementById('react-rate-invite-tel').value,
+                    reactRateInviteTelPrev: document.getElementById('react-rate-invite-tel-prev').value, // NEW
+                    reactRateInviteTelLastYear: document.getElementById('react-rate-invite-tel-lastyear').value, // NEW
+                    
+                    // ③ 成約率
+                    reactRateCloseTotal: document.getElementById('react-rate-close-total').value,
+                    reactRateCloseTotalPrev: document.getElementById('react-rate-close-total-prev').value, // NEW
+                    reactRateCloseTotalLastYear: document.getElementById('react-rate-close-total-lastyear').value, // NEW
+                    reactRateCloseMail: document.getElementById('react-rate-close-mail').value,
+                    reactRateCloseMailPrev: document.getElementById('react-rate-close-mail-prev').value, // NEW
+                    reactRateCloseMailLastYear: document.getElementById('react-rate-close-mail-lastyear').value, // NEW
+                    reactRateCloseTel: document.getElementById('react-rate-close-tel').value,
+                    reactRateCloseTelPrev: document.getElementById('react-rate-close-tel-prev').value, // NEW
+                    reactRateCloseTelLastYear: document.getElementById('react-rate-close-tel-lastyear').value, // NEW
+                    reactRateCloseWalkin: document.getElementById('react-rate-close-walkin').value,
+                    reactRateCloseWalkinPrev: document.getElementById('react-rate-close-walkin-prev').value, // NEW
+                    reactRateCloseWalkinLastYear: document.getElementById('react-rate-close-walkin-lastyear').value, // NEW
+                    
+                    // ④ 効率指標 (削除)
+
+                    reactionFactor: document.getElementById('reaction-factor').value,
+                },
+
+
+                // Section 7 Store
                 storeName: document.getElementById('store-name').value,
                 storeAchievementSummary: document.getElementById('store-achievement-summary').value,
                 goodStoreFactor: document.getElementById('good-store-factor').value,
@@ -896,6 +1190,47 @@
             document.getElementById('annualGoal-input').value = data.overallMidTermData?.annualGoal || 0;
             document.getElementById('annualActual-input').value = data.overallMidTermData?.annualActual || 0;
 
+            // NEW: Reaction Data
+            if (data.reactionData) {
+                document.getElementById('react-val-mail').value = data.reactionData.reactValMail || 0;
+                document.getElementById('react-val-mail-percent').value = data.reactionData.reactValMailPercent || '0%';
+                document.getElementById('react-val-mail-prev').value = data.reactionData.reactValMailPrev || 0; // NEW
+                document.getElementById('react-val-mail-lastyear').value = data.reactionData.reactValMailLastYear || 0; // NEW
+                document.getElementById('react-val-tel').value = data.reactionData.reactValTel || 0;
+                document.getElementById('react-val-tel-percent').value = data.reactionData.reactValTelPercent || '0%';
+                document.getElementById('react-val-tel-prev').value = data.reactionData.reactValTelPrev || 0; // NEW
+                document.getElementById('react-val-tel-lastyear').value = data.reactionData.reactValTelLastYear || 0; // NEW
+                document.getElementById('react-val-walkin').value = data.reactionData.reactValWalkin || 0;
+                document.getElementById('react-val-walkin-percent').value = data.reactionData.reactValWalkinPercent || '0%';
+                document.getElementById('react-val-walkin-prev').value = data.reactionData.reactValWalkinPrev || 0; // NEW
+                document.getElementById('react-val-walkin-lastyear').value = data.reactionData.reactValWalkinLastYear || 0; // NEW
+                document.getElementById('react-rate-invite-mail').value = data.reactionData.reactRateInviteMail || '0%';
+                document.getElementById('react-rate-invite-mail-prev').value = data.reactionData.reactRateInviteMailPrev || '0%'; // NEW
+                document.getElementById('react-rate-invite-mail-lastyear').value = data.reactionData.reactRateInviteMailLastYear || '0%'; // NEW
+                document.getElementById('react-rate-invite-tel').value = data.reactionData.reactRateInviteTel || '0%';
+                document.getElementById('react-rate-invite-tel-prev').value = data.reactionData.reactRateInviteTelPrev || '0%'; // NEW
+                document.getElementById('react-rate-invite-tel-lastyear').value = data.reactionData.reactRateInviteTelLastYear || '0%'; // NEW
+                document.getElementById('react-rate-close-total').value = data.reactionData.reactRateCloseTotal || '0%';
+                document.getElementById('react-rate-close-total-prev').value = data.reactionData.reactRateCloseTotalPrev || '0%'; // NEW
+                document.getElementById('react-rate-close-total-lastyear').value = data.reactionData.reactRateCloseTotalLastYear || '0%'; // NEW
+                document.getElementById('react-rate-close-mail').value = data.reactionData.reactRateCloseMail || '0%';
+                document.getElementById('react-rate-close-mail-prev').value = data.reactionData.reactRateCloseMailPrev || '0%'; // NEW
+                document.getElementById('react-rate-close-mail-lastyear').value = data.reactionData.reactRateCloseMailLastYear || '0%'; // NEW
+                document.getElementById('react-rate-close-tel').value = data.reactionData.reactRateCloseTel || '0%';
+                document.getElementById('react-rate-close-tel-prev').value = data.reactionData.reactRateCloseTelPrev || '0%'; // NEW
+                document.getElementById('react-rate-close-tel-lastyear').value = data.reactionData.reactRateCloseTelLastYear || '0%'; // NEW
+                document.getElementById('react-rate-close-walkin').value = data.reactionData.reactRateCloseWalkin || '0%';
+                document.getElementById('react-rate-close-walkin-prev').value = data.reactionData.reactRateCloseWalkinPrev || '0%'; // NEW
+                document.getElementById('react-rate-close-walkin-lastyear').value = data.reactionData.reactRateCloseWalkinLastYear || '0%'; // NEW
+                
+                // ④ 効率指標に関するデータは削除済みのため、ここでは処理しない
+                
+                document.getElementById('reaction-factor').value = data.reactionData.reactionFactor || "";
+                reactionData = JSON.parse(JSON.stringify(data.reactionData));
+            } else {
+                 reactionData = JSON.parse(JSON.stringify(initialReactionData));
+            }
+            
             // 2. Update array/object data (JSON.parse(JSON.stringify())でディープコピーを確実に行う)
             salesData = data.salesData ? JSON.parse(JSON.stringify(data.salesData)) : JSON.parse(JSON.stringify(initialSalesData));
             overallMidTermData = data.overallMidTermData ? JSON.parse(JSON.stringify(data.overallMidTermData)) : JSON.parse(JSON.stringify(initialOverallMidTermData));
@@ -1083,6 +1418,8 @@
                     const field = e.target.dataset.field;
                     const cleanValue = e.target.value.replace(/,/g, '');
                     overallMidTermData[field] = parseFloat(cleanValue) || 0;
+                    // 中長期実績の計算も実行
+                    calculateMidTermMetrics();
                     debounceSave();
                 });
             });

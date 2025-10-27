@@ -462,18 +462,23 @@
         let firebaseConfig = {};
         let initialAuthToken = null;
         let isFirebaseEnabled = false;
+        
+        // appId の最終決定
+        let appId = 'default-app-id'; // デフォルト値を設定
 
         if (provided_app_id && provided_firebase_config && provided_initial_auth_token) {
             // 1. Canvas環境で実行されている場合 (優先)
             firebaseConfig = JSON.parse(provided_firebase_config);
             initialAuthToken = provided_initial_auth_token;
             isFirebaseEnabled = true;
+            appId = provided_app_id;
             console.log("Environment: Canvas (Firebase Enabled)");
         } else if (GITHUB_FIREBASE_CONFIG.apiKey && GITHUB_FIREBASE_CONFIG.projectId) {
             // 2. GitHub PagesなどのWebサーバーで実行されている場合 (固定設定を使用)
             firebaseConfig = GITHUB_FIREBASE_CONFIG;
             initialAuthToken = null; // カスタム認証トークンは使用しない
             isFirebaseEnabled = true;
+            appId = GITHUB_FIREBASE_CONFIG.projectId; // projectIdをappIdとして使用
             console.log("Environment: External Server (Fixed Firebase Config Used)");
         } else {
             // 3. Firebase設定が一切ない場合 (ローカルファイルなど)
@@ -481,9 +486,6 @@
             console.log("Environment: Local/No Config (Firebase Disabled)");
         }
         
-        // appId の決定 (Canvas提供値 > 固定設定値 > デフォルト)
-        const appId = provided_app_id || firebaseConfig.projectId || 'default-app-id';
-
         // *******************************************************************
 
         let db, auth, userId;
@@ -978,8 +980,14 @@
                     await auth.signInWithCustomToken(initialAuthToken);
                 } else {
                     // GitHub Pagesなど外部環境の場合は匿名認証
-                    // v8 Auth構文: auth.signInAnonymouslyを使用
-                    await auth.signInAnonymously();
+                    try {
+                        // v8 Auth構文: auth.signInAnonymouslyを使用
+                        await auth.signInAnonymously();
+                    } catch(authError) {
+                        console.error("Anonymous Authentication Failed:", authError);
+                        document.getElementById('loading-status').textContent = '（認証失敗 - 匿名認証が必要です）';
+                        // 認証が失敗しても、以降の処理は続行させる（onAuthStateChangedで改めて状態を処理）
+                    }
                 }
 
                 // 認証状態の変更を監視
@@ -996,10 +1004,20 @@
                         const initialMonth = document.getElementById('month-input').value;
                         const initialStore = document.getElementById('store-select').value;
                         loadReport(initialYear, initialMonth, initialStore);
+                        document.getElementById('loading-status').textContent = `（接続済み: ユーザーID ${userId}）`;
                         console.log("Firebase initialized. User ID:", userId);
                     } else {
                         console.log("No user signed in.");
+                        // 匿名認証に失敗した場合、ここに来る
                         document.getElementById('loading-status').textContent = '（認証が必要です）';
+                        
+                        // 認証がない場合でもUIの初期設定と計算は行う
+                        renderDateSelects(); 
+                        renderStoreSelect();
+                        calculateProfitTotals(); 
+                        renderSalesTable(); 
+                        renderActionPlan(); 
+                        calculateMetrics();
                     }
                 });
 
@@ -1081,15 +1099,15 @@
                 selectedStore = store; 
                 
                 // Firebaseが有効で初期化されている場合のみロードを実行
-                if (isFirebaseEnabled) {
+                if (isFirebaseEnabled && auth.currentUser) {
                     loadReport(year, month, store);
                 } else {
-                     // Firebaseが無効の場合、ローカルでの再計算と描画のみ実行
+                     // Firebaseが無効または未認証の場合、ローカルでの再計算と描画のみ実行
                      calculateProfitTotals(); 
                      renderSalesTable(); 
                      renderActionPlan(); 
                      calculateMetrics();
-                     document.getElementById('loading-status').textContent = '（注意: クラウド保存・同期は無効です - 設定情報が不足しています）';
+                     document.getElementById('loading-status').textContent = isFirebaseEnabled ? '（認証が必要です）' : '（注意: クラウド保存・同期は無効です - 設定情報が不足しています）';
                 }
             };
             document.getElementById('load-report-btn').addEventListener('click', handleReportDateChange);
@@ -1137,13 +1155,7 @@
             // Firebaseの初期化（有効な場合のみ実行）
             initializeFirebase(); 
 
-            // Firebaseが有効でない場合、初期値での描画を行う
-            if (!isFirebaseEnabled) {
-                const initialYear = document.getElementById('year-input').value;
-                const initialMonth = document.getElementById('month-input').value;
-                const initialStore = document.getElementById('store-select').value;
-                handleReportDateChange(); // 初期値でUIを更新し、計算を実行
-            }
+            // Firebaseが有効でない場合、初期値での描画を行う (initializeFirebase内のelseブロックに処理を委譲)
         }
 
     </script>

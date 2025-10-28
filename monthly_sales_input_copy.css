@@ -107,9 +107,13 @@
                 content: attr(value); /* value属性ではなく、現在の内容を表示 */
             }
         }
-        /* 固定幅のクラス */
-        .w-28 { width: 7rem !important; }
-        .w-20 { width: 5rem !important; }
+        /* 固定幅のカスタムクラス */
+        /* 利益・実績額用 (9rem) */
+        .w-col-lg { width: 9rem !important; min-width: 9rem !important; } 
+        /* 平均粗利用 (7rem) */
+        .w-col-md { width: 7rem !important; min-width: 7rem !important; }
+        /* 達成率・比率用 */
+        .w-col-sm { width: 5rem !important; min-width: 5rem !important; }
     </style>
 
     <!-- Firebase SDKのインポートをv8.10.1に統一し、ローカル実行時の安定性を向上 -->
@@ -195,13 +199,13 @@
                     <thead class="bg-gray-50">
                         <tr>
                             <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">項目</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">目標額(A)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">実績額(B)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">前月実績(C)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">前年実績(D)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20">達成率(B/A)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-20">前月比(B/C)</th>
-                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-28">平均粗利</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-lg">目標額(A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-lg">実績額(B)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-lg">前月実績(C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-lg">前年実績(D)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-sm">達成率(B/A)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-sm">前月比(B/C)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider w-col-md">平均粗利</th>
                         </tr>
                     </thead>
                     <tbody id="sales-table-body" class="bg-white divide-y divide-gray-200">
@@ -722,7 +726,7 @@
             reactRateInviteMailPrev: '38%', // NEW
             reactRateInviteMailLastYear: '42%', // NEW
             reactRateInviteTel: '60%',
-            reactRateInviteTelPrev: '65%', // NEW
+            reactRateInviteInviteTelPrev: '65%', // NEW
             reactRateInviteTelLastYear: '55%', // NEW
             // ③ 成約率 (%)
             reactRateCloseTotal: '15%',
@@ -985,25 +989,25 @@
                 tr.innerHTML = `
                     <td class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
                     ${isCalculatedRow ? 
-                        // 全体利益の目標額(A)は手動入力フィールドに変更
-                        `<td class="w-28"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額" id="goal-input-0"></td>
-                         <td class="w-28"><div class="calculated-value bg-yellow-50" data-field="actual-display">${formatNumber(item.actual)}</div></td>
-                         <td class="w-28"><div class="calculated-value" data-field="prevMonth-display">${formatNumber(item.prevMonth)}</div></td>
-                         <td class="w-28"><div class="calculated-value" data-field="prevYear-display">${formatNumber(item.prevYear)}</div></td>`
+                        // 全体利益の目標額(A)は手動入力フィールドに変更 (w-col-lg に変更)
+                        `<td class="w-col-lg"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額" id="goal-input-0"></td>
+                         <td class="w-col-lg"><div class="calculated-value bg-yellow-50" data-field="actual-display">${formatNumber(item.actual)}</div></td>
+                         <td class="w-col-lg"><div class="calculated-value" data-field="prevMonth-display">${formatNumber(item.prevMonth)}</div></td>
+                         <td class="w-col-lg"><div class="calculated-value" data-field="prevYear-display">${formatNumber(item.prevYear)}</div></td>`
                         :
-                        // data-array="salesData"を追加
-                        `<td class="w-28"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額"></td>
-                         <td class="w-28"><input type="text" data-id="${index}" data-field="actual" value="${item.actual}" class="data-input profit-input bg-yellow-50 data-array-input" data-array="salesData" placeholder="実績額"></td>
-                         <td class="w-28"><input type="text" data-id="${index}" data-field="prevMonth" value="${item.prevMonth}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前月実績"></td>
-                         <td class="w-28"><input type="text" data-id="${index}" data-field="prevYear" value="${item.prevYear}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前年実績"></td>`
+                        // data-array="salesData"を追加 (w-col-lg に変更)
+                        `<td class="w-col-lg"><input type="text" data-id="${index}" data-field="goal" value="${item.goal}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="目標額"></td>
+                         <td class="w-col-lg"><input type="text" data-id="${index}" data-field="actual" value="${item.actual}" class="data-input profit-input bg-yellow-50 data-array-input" data-array="salesData" placeholder="実績額"></td>
+                         <td class="w-col-lg"><input type="text" data-id="${index}" data-field="prevMonth" value="${item.prevMonth}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前月実績"></td>
+                         <td class="w-col-lg"><input type="text" data-id="${index}" data-field="prevYear" value="${item.prevYear}" class="data-input profit-input data-array-input" data-array="salesData" placeholder="前年実績"></td>`
                     }
-                    <td class="w-20">
+                    <td class="w-col-sm">
                         <div class="calculated-value text-sm achievement-rate-cell ${parseFloat(achievementRate) >= 100 ? 'text-green-600' : 'text-red-600'}">${achievementRate}%</div>
                     </td>
-                    <td class="w-20">
+                    <td class="w-col-sm">
                         <div class="calculated-value text-sm prev-month-ratio-cell">${prevMonthRatio}%</div>
                     </td>
-                    <td class="w-28">
+                    <td class="w-col-md">
                         <div class="calculated-value text-sm avg-profit-cell" data-avg-id="${index}">--</div>
                     </td>
                 `;
@@ -1359,23 +1363,32 @@
                 db = app.firestore();
                 auth = app.auth();
                 
-                // 認証ロジック (initialAuthTokenはCanvasでのみ使用)
-                // initialAuthTokenが存在し、かつ空文字ではない場合にのみカスタムトークン認証を試みる
+                let authAttempted = false;
+
+                // 1. カスタムトークン認証を試みる (Canvasの場合)
                 if (initialAuthToken && initialAuthToken.length > 0) { 
-                    // v8 Auth構文: auth.signInWithCustomTokenを使用
-                    await auth.signInWithCustomToken(initialAuthToken);
-                } else {
-                    // GitHub Pagesなど外部環境の場合は匿名認証
                     try {
-                        // v8 Auth構文: auth.signInAnonymouslyを使用
-                        await auth.signInAnonymously();
-                    } catch(authError) {
-                        console.error("Anonymous Authentication Failed:", authError);
-                        document.getElementById('loading-status').textContent = '（認証失敗 - 匿名認証が必要です）';
-                        // 認証が失敗しても、以降の処理は続行させる（onAuthStateChangedで改めて状態を処理）
+                        // v8 Auth構文: auth.signInWithCustomTokenを使用
+                        await auth.signInWithCustomToken(initialAuthToken);
+                        authAttempted = true;
+                        console.log("Signed in with Custom Token.");
+                    } catch(e) {
+                        console.warn("Custom Token failed. Falling back to anonymous sign-in.");
+                        console.error("Custom Token Error Detail:", e); 
                     }
                 }
 
+                // 2. 認証が成功していない場合、匿名認証を試みる (GitHub Pages / Canvasのフォールバック)
+                if (!authAttempted) {
+                    try {
+                        // v8 Auth構文: auth.signInAnonymouslyを使用
+                        await auth.signInAnonymously();
+                    } catch(e) {
+                        console.error("Anonymous Authentication Failed:", e);
+                        document.getElementById('loading-status').textContent = '（認証失敗 - 匿名認証が必要です）';
+                    }
+                }
+                
                 // 認証状態の変更を監視
                 // v8 Auth構文: auth.onAuthStateChangedを使用
                 auth.onAuthStateChanged((user) => {
